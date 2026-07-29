@@ -1,52 +1,42 @@
-﻿import { app, BrowserWindow, ipcMain } from "electron";
+import {
+  app,
+  BaseWindow,
+  WebContentsView,
+  ipcMain,
+  session
+} from "electron";
+import type { Rectangle } from "electron";
 import path from "path";
 import fs from "fs";
-import sharp from "sharp";
-import { createWorker } from "tesseract.js";
 
-let mainWindow: BrowserWindow | null = null;
-let ocrWorker: any = null;
-let ocrReady = false;
+const DEFAULT_HOME_URL = "https://example.com";
+const DASHBOARD_WIDTH = 390;
+const MIN_PLATFORM_WIDTH = 700;
+const CAPTURE_PARTITION = "persist:visual-trading-browser-platform";
 
-function createMainWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1500,
-    height: 900,
-    minWidth: 1100,
-    minHeight: 700,
-    title: "Visual Trading Browser",
-    webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: false,
-      webSecurity: true,
-      webviewTag: true
-    }
-  });
+type TimingPhase = "WAITING" | "OBSERVING" | "FORMING_SCAN" | "LOCK_WINDOW";
 
-  mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+type CaptureState = {
+  running: boolean;
+  sequence: number;
+  phase: TimingPhase;
+  candleSecond: number | null;
+  candleRemaining: number | null;
+  intervalMs: number;
+  latestPath: string | null;
+};
 
-  mainWindow.on("closed", () => {
-    mainWindow = null;
-  });
-}
+let mainWindow: BaseWindow | null = null;
+let dashboardView: WebContentsView | null = null;
+let platformView: WebContentsView | null = null;
 
-async function getOcrWorker() {
-  if (ocrReady && ocrWorker) {
-    return ocrWorker;
-  }
-
-  ocrWorker = await createWorker("eng");
-
-  await ocrWorker.setParameters({
-    tessedit_char_whitelist: "0123456789:",
-    tessedit_pageseg_mode: "7"
-  });
-
-  ocrReady = true;
-  return ocrWorker;
-}
+let captureRunning = false;
+let captureInFlight = false;
+let captureTimer: NodeJS.Timeout | null = null;
+let captureStartedAt: number | null = null;
+let captureSequence = 0;
+let latestCapturePath: string | null = null;
+let lastCaptureIntervalMs = 1000;
 
 function getCaptureDir() {
   const captureDir = path.join(app.getPath("userData"), "captures");
@@ -54,260 +44,352 @@ function getCaptureDir() {
   return captureDir;
 }
 
-function extractCountdown(text: string) {
-  const normalized = text
-    .replace(/[Oo]/g, "0")
-    .replace(/[Il|]/g, "1")
-    .replace(/[;.\-]/g, ":")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const mmssMatch = normalized.match(/\b0{1,2}:([0-5][0-9])\b/);
-
-  if (mmssMatch) {
-    const seconds = Number(mmssMatch[1]);
-
-    if (!Number.isNaN(seconds) && seconds >= 0 && seconds <= 59) {
-      return {
-        raw: "00:" + String(seconds).padStart(2, "0"),
-        seconds,
-        sourceText: normalized
-      };
-    }
+function isHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
   }
-
-  const compactMatch = normalized.match(/\b0{2}([0-5][0-9])\b/);
-
-  if (compactMatch) {
-    const seconds = Number(compactMatch[1]);
-
-    if (!Number.isNaN(seconds) && seconds >= 0 && seconds <= 59) {
-      return {
-        raw: "00:" + String(seconds).padStart(2, "0"),
-        seconds,
-        sourceText: normalized
-      };
-    }
-  }
-
-  return null;
 }
 
-type CropRatio = {
-  name: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
+function normalizeUrl(input: string) {
+  const trimmed = input.trim();
 
-function buildCropCandidates(): CropRatio[] {
-  return [
-    {
-      name: "quotex_timer_tight",
-      x: 0.54,
-      y: 0.34,
-      width: 0.13,
-      height: 0.08
-    },
-    {
-      name: "quotex_timer_medium",
-      x: 0.50,
-      y: 0.30,
-      width: 0.22,
-      height: 0.15
-    },
-    {
-      name: "quotex_timer_wide",
-      x: 0.44,
-      y: 0.25,
-      width: 0.35,
-      height: 0.25
-    },
-    {
-      name: "chart_center_right",
-      x: 0.45,
-      y: 0.20,
-      width: 0.40,
-      height: 0.45
-    },
-    {
-      name: "chart_full_middle",
-      x: 0.25,
-      y: 0.18,
-      width: 0.65,
-      height: 0.55
-    }
-  ];
+  if (!trimmed) {
+    return DEFAULT_HOME_URL;
+  }
+
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  if (!isHttpUrl(withProtocol)) {
+    throw new Error("Only http:// and https:// platform URLs are allowed.");
+  }
+
+  return new URL(withProtocol).toString();
 }
 
-function ratioToPixelCrop(candidate: CropRatio, width: number, height: number) {
-  const x = Math.max(0, Math.floor(width * candidate.x));
-  const y = Math.max(0, Math.floor(height * candidate.y));
+function getTimingPhase(second: number | null): TimingPhase {
+  if (second === null) {
+    return "WAITING";
+  }
 
-  const cropWidth = Math.min(
-    width - x,
-    Math.max(10, Math.floor(width * candidate.width))
-  );
+  if (second >= 55) {
+    return "LOCK_WINDOW";
+  }
 
-  const cropHeight = Math.min(
-    height - y,
-    Math.max(10, Math.floor(height * candidate.height))
-  );
+  if (second >= 40) {
+    return "FORMING_SCAN";
+  }
+
+  return "OBSERVING";
+}
+
+function getCaptureIntervalMs(phase: TimingPhase) {
+  if (phase === "LOCK_WINDOW") {
+    return 200;
+  }
+
+  if (phase === "FORMING_SCAN") {
+    return 350;
+  }
+
+  return 1000;
+}
+
+function getCaptureState(): CaptureState {
+  let candleSecond: number | null = null;
+  let candleRemaining: number | null = null;
+
+  if (captureStartedAt !== null) {
+    candleSecond = Math.floor((Date.now() - captureStartedAt) / 1000) % 60;
+    candleRemaining = 60 - candleSecond;
+  }
+
+  const phase = getTimingPhase(candleSecond);
+  const intervalMs = getCaptureIntervalMs(phase);
 
   return {
-    left: x,
-    top: y,
-    width: cropWidth,
-    height: cropHeight
+    running: captureRunning,
+    sequence: captureSequence,
+    phase,
+    candleSecond,
+    candleRemaining,
+    intervalMs,
+    latestPath: latestCapturePath
   };
 }
 
-async function preprocessTimerCrop(
-  sourceBuffer: Buffer,
-  crop: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  },
-  invert: boolean,
-  thresholdValue: number
-) {
-  let pipeline = sharp(sourceBuffer)
-    .extract(crop)
-    .resize({
-      width: crop.width * 8,
-      height: crop.height * 8,
-      kernel: "nearest"
-    })
-    .grayscale()
-    .normalize()
-    .sharpen()
-    .threshold(thresholdValue);
-
-  if (invert) {
-    pipeline = pipeline.negate();
+function sendDashboard(channel: string, payload: unknown) {
+  if (!dashboardView || dashboardView.webContents.isDestroyed()) {
+    return;
   }
 
-  return pipeline.png().toBuffer();
+  dashboardView.webContents.send(channel, payload);
 }
 
-ipcMain.handle("capture:save-latest", async (_event, dataUrl: string) => {
-  const captureDir = getCaptureDir();
-  const latestPath = path.join(captureDir, "latest-chart-capture.png");
+function resizeViews() {
+  if (!mainWindow || !dashboardView || !platformView) {
+    return;
+  }
 
-  const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-  fs.writeFileSync(latestPath, Buffer.from(base64, "base64"));
+  const [width, height] = mainWindow.getContentSize();
+  const dashboardWidth = Math.min(DASHBOARD_WIDTH, Math.max(320, width - MIN_PLATFORM_WIDTH));
+  const platformWidth = Math.max(0, width - dashboardWidth);
 
+  const platformBounds: Rectangle = {
+    x: 0,
+    y: 0,
+    width: platformWidth,
+    height
+  };
+
+  const dashboardBounds: Rectangle = {
+    x: platformWidth,
+    y: 0,
+    width: dashboardWidth,
+    height
+  };
+
+  platformView.setBounds(platformBounds);
+  dashboardView.setBounds(dashboardBounds);
+}
+
+function configurePlatformSecurity() {
+  const platformSession = session.fromPartition(CAPTURE_PARTITION);
+
+  platformSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
+}
+
+function createMainWindow() {
+  configurePlatformSecurity();
+
+  mainWindow = new BaseWindow({
+    width: 1500,
+    height: 900,
+    minWidth: 1100,
+    minHeight: 700,
+    title: "Visual Trading Browser"
+  });
+
+  dashboardView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+      webSecurity: true
+    }
+  });
+
+  platformView = new WebContentsView({
+    webPreferences: {
+      session: session.fromPartition(CAPTURE_PARTITION),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+      javascript: true
+    }
+  });
+
+  mainWindow.contentView.addChildView(platformView);
+  mainWindow.contentView.addChildView(dashboardView);
+
+  resizeViews();
+  mainWindow.on("resize", resizeViews);
+  mainWindow.on("closed", () => {
+    stopCaptureLoop();
+    mainWindow = null;
+    dashboardView = null;
+    platformView = null;
+  });
+
+  dashboardView.webContents.loadFile(path.join(__dirname, "../renderer/index.html"));
+  loadPlatformUrl(DEFAULT_HOME_URL);
+}
+
+function emitNavigationState() {
+  if (!platformView) {
+    return;
+  }
+
+  sendDashboard("browser:navigation-state", {
+    url: platformView.webContents.getURL(),
+    canGoBack: platformView.webContents.canGoBack(),
+    canGoForward: platformView.webContents.canGoForward()
+  });
+}
+
+function attachPlatformEvents() {
+  if (!platformView) {
+    return;
+  }
+
+  platformView.webContents.on("did-navigate", emitNavigationState);
+  platformView.webContents.on("did-navigate-in-page", emitNavigationState);
+  platformView.webContents.on("did-finish-load", emitNavigationState);
+
+  platformView.webContents.on("will-navigate", (event, url) => {
+    if (!isHttpUrl(url)) {
+      event.preventDefault();
+    }
+  });
+
+  platformView.webContents.setWindowOpenHandler(({ url }) => {
+    if (isHttpUrl(url)) {
+      platformView?.webContents.loadURL(url);
+    }
+
+    return { action: "deny" };
+  });
+}
+
+function loadPlatformUrl(inputUrl: string) {
+  if (!platformView) {
+    throw new Error("Platform view is not ready.");
+  }
+
+  const url = normalizeUrl(inputUrl);
+  platformView.webContents.loadURL(url);
+  return url;
+}
+
+function scheduleNextCapture() {
+  if (!captureRunning) {
+    return;
+  }
+
+  if (captureTimer) {
+    clearTimeout(captureTimer);
+  }
+
+  const state = getCaptureState();
+  lastCaptureIntervalMs = state.intervalMs;
+  sendDashboard("capture:state", state);
+
+  captureTimer = setTimeout(() => {
+    void captureOnce();
+  }, state.intervalMs);
+}
+
+async function captureOnce() {
+  if (!captureRunning || captureInFlight || !platformView) {
+    scheduleNextCapture();
+    return;
+  }
+
+  captureInFlight = true;
+
+  try {
+    const image = await platformView.webContents.capturePage();
+    const imageSize = image.getSize();
+    const captureDir = getCaptureDir();
+
+    captureSequence += 1;
+    latestCapturePath = path.join(captureDir, "latest-platform-capture.png");
+    fs.writeFileSync(latestCapturePath, image.toPNG());
+
+    const state = getCaptureState();
+
+    sendDashboard("capture:frame", {
+      ok: true,
+      sequence: captureSequence,
+      capturedAt: new Date().toISOString(),
+      imageSize,
+      phase: state.phase,
+      candleSecond: state.candleSecond,
+      candleRemaining: state.candleRemaining,
+      intervalMs: lastCaptureIntervalMs,
+      savedPath: latestCapturePath,
+      previewDataUrl: image.resize({ width: 360 }).toDataURL()
+    });
+  } catch (error) {
+    sendDashboard("capture:frame", {
+      ok: false,
+      error: String(error),
+      capturedAt: new Date().toISOString()
+    });
+  } finally {
+    captureInFlight = false;
+    scheduleNextCapture();
+  }
+}
+
+function startCaptureLoop() {
+  captureRunning = true;
+  captureStartedAt = Date.now();
+  captureSequence = 0;
+  latestCapturePath = null;
+
+  void captureOnce();
+  return getCaptureState();
+}
+
+function stopCaptureLoop() {
+  captureRunning = false;
+
+  if (captureTimer) {
+    clearTimeout(captureTimer);
+    captureTimer = null;
+  }
+
+  captureStartedAt = null;
+  sendDashboard("capture:state", getCaptureState());
+  return getCaptureState();
+}
+
+ipcMain.handle("browser:navigate", async (_event, url: string) => {
+  const loadedUrl = loadPlatformUrl(url);
   return {
-    ok: true,
-    savedPath: latestPath
+    ...getCaptureState(),
+    url: loadedUrl
   };
 });
 
-ipcMain.handle("ocr:detect-countdown", async (_event, dataUrl: string) => {
-  const captureDir = getCaptureDir();
-
-  const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-  const sourceBuffer = Buffer.from(base64, "base64");
-
-  const metadata = await sharp(sourceBuffer).metadata();
-  const imageWidth = metadata.width || 1;
-  const imageHeight = metadata.height || 1;
-
-  const worker = await getOcrWorker();
-
-  const attempts: any[] = [];
-  const candidates = buildCropCandidates();
-  const thresholds = [100, 130, 160, 190];
-
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i];
-    const crop = ratioToPixelCrop(candidate, imageWidth, imageHeight);
-
-    for (const thresholdValue of thresholds) {
-      for (const invert of [false, true]) {
-        const processedBuffer = await preprocessTimerCrop(
-          sourceBuffer,
-          crop,
-          invert,
-          thresholdValue
-        );
-
-        const cropPath = path.join(
-          captureDir,
-          `latest-timer-crop-${i}-${thresholdValue}-${invert ? "invert" : "normal"}.png`
-        );
-
-        fs.writeFileSync(cropPath, processedBuffer);
-
-        try {
-          const result = await worker.recognize(processedBuffer);
-          const text = result?.data?.text || "";
-          const countdown = extractCountdown(text);
-
-          const attempt = {
-            candidate: candidate.name,
-            thresholdValue,
-            invert,
-            crop,
-            cropPath,
-            ocrText: text,
-            countdown
-          };
-
-          attempts.push(attempt);
-
-          if (countdown) {
-            const bestCropPath = path.join(captureDir, "latest-timer-crop-best.png");
-            fs.writeFileSync(bestCropPath, processedBuffer);
-
-            return {
-              ok: true,
-              countdown,
-              ocrText: text,
-              cropPath: bestCropPath,
-              cropRect: crop,
-              attempts
-            };
-          }
-        } catch (error) {
-          attempts.push({
-            candidate: candidate.name,
-            thresholdValue,
-            invert,
-            crop,
-            cropPath,
-            error: String(error)
-          });
-        }
-      }
-    }
+ipcMain.handle("browser:back", async () => {
+  if (platformView?.webContents.canGoBack()) {
+    platformView.webContents.goBack();
   }
 
-  return {
-    ok: false,
-    ocrText: attempts.map((item) => item.ocrText || item.error || "").join(" | "),
-    cropPath: attempts.length > 0 ? attempts[0].cropPath : null,
-    attempts
-  };
+  emitNavigationState();
+  return true;
 });
+
+ipcMain.handle("browser:forward", async () => {
+  if (platformView?.webContents.canGoForward()) {
+    platformView.webContents.goForward();
+  }
+
+  emitNavigationState();
+  return true;
+});
+
+ipcMain.handle("browser:reload", async () => {
+  platformView?.webContents.reload();
+  return true;
+});
+
+ipcMain.handle("capture:start", async () => startCaptureLoop());
+ipcMain.handle("capture:stop", async () => stopCaptureLoop());
+ipcMain.handle("capture:get-state", async () => getCaptureState());
 
 app.whenReady().then(() => {
   createMainWindow();
+  attachPlatformEvents();
 
   app.on("activate", () => {
-    if (mainWindow === null) createMainWindow();
+    if (mainWindow === null) {
+      createMainWindow();
+      attachPlatformEvents();
+    }
   });
 });
 
-app.on("before-quit", async () => {
-  if (ocrWorker) {
-    await ocrWorker.terminate();
-  }
-});
-
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") app.quit();
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
 });

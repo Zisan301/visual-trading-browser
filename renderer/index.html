@@ -1,42 +1,25 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Visual Trading Browser</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';" />
+  <title>Visual Trading Browser Dashboard</title>
   <style>
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
+      min-height: 100vh;
       overflow: hidden;
-      background: #020617;
+      background: linear-gradient(180deg, #111827, #020617);
       color: #e5e7eb;
       font-family: Segoe UI, Arial, sans-serif;
-    }
-
-    .app {
-      width: 100vw;
-      height: 100vh;
-      display: grid;
-      grid-template-columns: minmax(600px, 1fr) 390px;
-    }
-
-    .browser-area {
-      height: 100vh;
-      background: white;
-    }
-
-    webview {
-      width: 100%;
-      height: 100%;
-      display: flex;
     }
 
     .panel {
       height: 100vh;
       overflow-y: auto;
       padding: 16px;
-      background: linear-gradient(180deg, #111827, #020617);
       border-left: 1px solid #334155;
     }
 
@@ -173,114 +156,88 @@
     }
 
     .error { color: #fecaca; }
-
-    canvas {
-      display: none;
-    }
+    .success { color: #bbf7d0; }
   </style>
 </head>
 
 <body>
-  <main class="app">
-    <section class="browser-area">
-      <webview
-        id="platformWebview"
-        src="https://example.com"
-        partition="persist:platform"
-        allowpopups="true">
-      </webview>
-    </section>
+  <aside class="panel">
+    <div class="brand">
+      <div>
+        <h1>Visual Trading Browser</h1>
+        <p class="muted">Secure M1 shell â€” platform is isolated in a separate WebContentsView.</p>
+      </div>
+      <span id="scannerBadge" class="badge">Scanner off</span>
+    </div>
 
-    <aside class="panel">
-      <div class="brand">
-        <div>
-          <h1>Visual Trading Browser</h1>
-          <p class="muted">Prediction-only browser shell — M1</p>
-        </div>
-        <span id="scannerBadge" class="badge">Scanner off</span>
+    <div class="card">
+      <h2>Browser controls</h2>
+      <p class="muted">Only http:// and https:// URLs are allowed. Remote pages cannot access this dashboard API.</p>
+
+      <label>
+        Platform URL
+        <input id="urlInput" value="https://example.com" />
+      </label>
+
+      <div class="button-grid">
+        <button id="goBtn">Go</button>
+        <button id="backBtn">Back</button>
+        <button id="forwardBtn">Forward</button>
+        <button id="reloadBtn">Reload</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Scanner</h2>
+      <p class="muted">
+        This M1 scanner captures the isolated platform view only for local preview/evidence. It does not click CALL/PUT, place trades, read cookies, or send frames to Python yet.
+      </p>
+
+      <div class="button-grid">
+        <button id="startScannerBtn">Start scanner</button>
+        <button id="stopScannerBtn" disabled>Stop scanner</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Live timing logic</h2>
+
+      <div class="metric">
+        <span>Candle remaining</span>
+        <strong id="candleRemaining">--</strong>
       </div>
 
-      <div class="card">
-        <h2>Browser controls</h2>
-
-        <label>
-          Platform URL
-          <input id="urlInput" value="https://example.com" />
-        </label>
-
-        <div class="button-grid">
-          <button id="goBtn">Go</button>
-          <button id="backBtn">Back</button>
-          <button id="forwardBtn">Forward</button>
-          <button id="reloadBtn">Reload</button>
-        </div>
+      <div class="metric">
+        <span>Current candle second</span>
+        <strong id="currentSecond">--</strong>
       </div>
 
-      <div class="card">
-        <h2>Scanner</h2>
-        <p class="muted">
-          Scanner now uses candle-rollover timing. It resets the candle timer when visual chart movement suggests a new candle has started.
-        </p>
-
-        <div class="button-grid">
-          <button id="startScannerBtn">Start scanner</button>
-          <button id="stopScannerBtn" disabled>Stop scanner</button>
-        </div>
+      <div class="metric">
+        <span>Current phase</span>
+        <strong id="currentPhase">WAITING</strong>
       </div>
 
-      <div class="card">
-        <h2>Live timing logic</h2>
-
-        <div class="metric">
-          <span>Timer source</span>
-          <strong id="timerSource">WAITING</strong>
-        </div>
-
-        <div class="metric">
-          <span>Rollover status</span>
-          <strong id="rolloverStatus">--</strong>
-        </div>
-
-        <div class="metric">
-          <span>Visual change score</span>
-          <strong id="changeScore">--</strong>
-        </div>
-
-        <div class="metric">
-          <span>Candle remaining</span>
-          <strong id="candleRemaining">--</strong>
-        </div>
-
-        <div class="metric">
-          <span>Current candle second</span>
-          <strong id="currentSecond">--</strong>
-        </div>
-
-        <div class="metric">
-          <span>Current phase</span>
-          <strong id="currentPhase">WAITING</strong>
-        </div>
-
-        <div class="phase-list">
-          <div id="phaseObserve">00–40s: observe current candle</div>
-          <div id="phaseForming">40–55s: detect forming strategy</div>
-          <div id="phaseLock">55–59s: lock prediction</div>
-        </div>
+      <div class="metric">
+        <span>Scan interval</span>
+        <strong id="scanInterval">--</strong>
       </div>
 
-      <div class="card">
-        <h2>Latest captured frame</h2>
-        <p id="frameStatus" class="muted">No frame captured yet.</p>
-        <img id="preview" class="preview" style="display:none;" />
-        <div id="frameInfo" class="small-info"></div>
+      <div class="phase-list">
+        <div id="phaseObserve">00â€“40s: observe current candle</div>
+        <div id="phaseForming">40â€“55s: detect forming strategy</div>
+        <div id="phaseLock">55â€“59s: lock prediction window</div>
       </div>
-    </aside>
-  </main>
+    </div>
 
-  <canvas id="analysisCanvas"></canvas>
+    <div class="card">
+      <h2>Latest captured frame</h2>
+      <p id="frameStatus" class="muted">No frame captured yet.</p>
+      <img id="preview" class="preview" style="display:none;" />
+      <div id="frameInfo" class="small-info"></div>
+    </div>
+  </aside>
 
   <script>
-    const webview = document.getElementById("platformWebview");
     const urlInput = document.getElementById("urlInput");
 
     const goBtn = document.getElementById("goBtn");
@@ -292,12 +249,10 @@
     const stopScannerBtn = document.getElementById("stopScannerBtn");
     const scannerBadge = document.getElementById("scannerBadge");
 
-    const timerSource = document.getElementById("timerSource");
-    const rolloverStatus = document.getElementById("rolloverStatus");
-    const changeScore = document.getElementById("changeScore");
     const candleRemaining = document.getElementById("candleRemaining");
     const currentSecond = document.getElementById("currentSecond");
     const currentPhase = document.getElementById("currentPhase");
+    const scanInterval = document.getElementById("scanInterval");
 
     const phaseObserve = document.getElementById("phaseObserve");
     const phaseForming = document.getElementById("phaseForming");
@@ -306,273 +261,43 @@
     const frameStatus = document.getElementById("frameStatus");
     const preview = document.getElementById("preview");
     const frameInfo = document.getElementById("frameInfo");
-    const analysisCanvas = document.getElementById("analysisCanvas");
 
-    let scannerTimer = null;
-    let candleStartedAt = null;
-    let previousSignature = null;
-    let lastRolloverAt = 0;
-    let currentScanIntervalMs = 500;
-    let isCapturing = false;
+    function updatePhaseDisplay(state) {
+      const phase = state.phase || "WAITING";
 
-    function normalizeUrl(input) {
-      const trimmed = input.trim();
-      if (!trimmed) return "https://example.com";
-      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
-      return "https://" + trimmed;
-    }
+      candleRemaining.textContent = state.candleRemaining === null || state.candleRemaining === undefined
+        ? "--"
+        : String(state.candleRemaining) + "s";
 
-    function navigate() {
-      const nextUrl = normalizeUrl(urlInput.value);
-      urlInput.value = nextUrl;
-      webview.src = nextUrl;
-    }
+      currentSecond.textContent = state.candleSecond === null || state.candleSecond === undefined
+        ? "--"
+        : String(state.candleSecond);
 
-    function resetCandleTimer(reason) {
-      candleStartedAt = Date.now();
-      lastRolloverAt = Date.now();
-      timerSource.textContent = "VISUAL ROLLOVER";
-      rolloverStatus.textContent = reason;
-      setScanSpeed(500);
-    }
-
-    function setScanSpeed(nextIntervalMs) {
-      if (currentScanIntervalMs === nextIntervalMs) {
-        return;
-      }
-
-      currentScanIntervalMs = nextIntervalMs;
-
-      if (scannerTimer) {
-        clearInterval(scannerTimer);
-        scannerTimer = setInterval(captureFrame, currentScanIntervalMs);
-      }
-    }
-
-    function getCandleTiming() {
-      if (candleStartedAt === null) {
-        return null;
-      }
-
-      const elapsedMs = Date.now() - candleStartedAt;
-      const elapsedSeconds = Math.floor(elapsedMs / 1000) % 60;
-      const remaining = 60 - elapsedSeconds;
-
-      return {
-        candleSecond: elapsedSeconds,
-        remaining
-      };
-    }
-
-    function updatePhase() {
-      const timing = getCandleTiming();
-
-      if (!timing) {
-        candleRemaining.textContent = "--";
-        currentSecond.textContent = "--";
-        currentPhase.textContent = "WAITING";
-        return;
-      }
-
-      const second = timing.candleSecond;
-      let phase = "OBSERVING";
-
-      if (second >= 55) {
-        phase = "LOCK_WINDOW";
-      } else if (second >= 40) {
-        phase = "FORMING_SCAN";
-      }
-
-      /*
-        Adaptive scan speed:
-        0-40s  = low CPU scan
-        40-50s = faster forming-signal scan
-        50-60s = high-speed rollover/lock scan
-      */
-      if (second >= 50) {
-        setScanSpeed(50);
-      } else if (second >= 40) {
-        setScanSpeed(250);
-      } else {
-        setScanSpeed(500);
-      }
-
-      candleRemaining.textContent = String(timing.remaining) + "s";
-      currentSecond.textContent = String(second);
       currentPhase.textContent = phase;
+      scanInterval.textContent = state.intervalMs ? String(state.intervalMs) + "ms" : "--";
 
       phaseObserve.classList.toggle("active-phase", phase === "OBSERVING");
       phaseForming.classList.toggle("active-phase", phase === "FORMING_SCAN");
       phaseLock.classList.toggle("active-phase", phase === "LOCK_WINDOW");
     }
 
-    function getVisualSignature(dataUrl) {
-      return new Promise((resolve) => {
-        const img = new Image();
-
-        img.onload = function() {
-          const width = 96;
-          const height = 54;
-
-          analysisCanvas.width = width;
-          analysisCanvas.height = height;
-
-          const ctx = analysisCanvas.getContext("2d", { willReadFrequently: true });
-
-          /*
-            Focus on right side of chart area where the running candle and price line change.
-            This is temporary. Full candle detector will replace it in M2.
-          */
-          ctx.drawImage(
-            img,
-            img.width * 0.48,
-            img.height * 0.18,
-            img.width * 0.28,
-            img.height * 0.70,
-            0,
-            0,
-            width,
-            height
-          );
-
-          const pixels = ctx.getImageData(0, 0, width, height).data;
-          const signature = [];
-
-          for (let i = 0; i < pixels.length; i += 16) {
-            const r = pixels[i];
-            const g = pixels[i + 1];
-            const b = pixels[i + 2];
-            const brightness = Math.round((r + g + b) / 3);
-            signature.push(brightness);
-          }
-
-          resolve(signature);
-        };
-
-        img.onerror = function() {
-          resolve(null);
-        };
-
-        img.src = dataUrl;
-      });
+    function setScannerRunning(running) {
+      scannerBadge.textContent = running ? "Scanner on" : "Scanner off";
+      scannerBadge.className = running ? "badge live" : "badge";
+      startScannerBtn.disabled = running;
+      stopScannerBtn.disabled = !running;
     }
 
-    function compareSignatures(a, b) {
-      if (!a || !b || a.length !== b.length) return 0;
-
-      let total = 0;
-
-      for (let i = 0; i < a.length; i++) {
-        total += Math.abs(a[i] - b[i]);
-      }
-
-      return total / a.length;
-    }
-
-    async function analyzeRollover(dataUrl) {
-      const signature = await getVisualSignature(dataUrl);
-
-      if (!signature) return;
-
-      if (!previousSignature) {
-        previousSignature = signature;
-        resetCandleTimer("initial visual sync");
-        return;
-      }
-
-      const score = compareSignatures(previousSignature, signature);
-      previousSignature = signature;
-
-      changeScore.textContent = score.toFixed(2);
-
-      const enoughTimeSinceLastRollover = Date.now() - lastRolloverAt > 45000;
-
-      /*
-        New candle usually creates a bigger chart update.
-        This threshold is temporary and can be tuned.
-      */
-      if (score > 12 && enoughTimeSinceLastRollover) {
-        resetCandleTimer("new candle visual rollover");
-      }
-    }
-
-    async function captureFrame() {
-      if (isCapturing) {
-        return;
-      }
-
-      isCapturing = true;
-
+    async function navigate() {
       try {
-        if (!webview.capturePage) {
-          throw new Error("webview.capturePage is not ready");
+        const result = await window.vtb.navigate(urlInput.value);
+        if (result.url) {
+          urlInput.value = result.url;
         }
-
-        const image = await webview.capturePage();
-        const dataUrl = image.toDataURL();
-        const size = image.getSize();
-
-        const saved = await window.vtb.saveLatestCapture(dataUrl);
-
-        frameStatus.textContent =
-          "Captured: " +
-          new Date().toISOString() +
-          " | scan interval: " +
-          currentScanIntervalMs +
-          "ms";
-
-        frameStatus.className = "muted";
-
-        preview.src = dataUrl;
-        preview.style.display = "block";
-
-        frameInfo.innerHTML =
-          "<p>Size: " + size.width + " × " + size.height + "</p>" +
-          "<p>Saved: " + saved.savedPath + "</p>";
-
-        await analyzeRollover(dataUrl);
       } catch (error) {
-        frameStatus.textContent = "Capture error: " + String(error);
+        frameStatus.textContent = String(error);
         frameStatus.className = "error";
-      } finally {
-        isCapturing = false;
       }
-    }
-
-    async function startScanner() {
-      if (scannerTimer) {
-        clearInterval(scannerTimer);
-      }
-
-      timerSource.textContent = "STARTING";
-      rolloverStatus.textContent = "waiting for first frame";
-
-      previousSignature = null;
-      candleStartedAt = null;
-      lastRolloverAt = 0;
-
-      await captureFrame();
-
-      currentScanIntervalMs = 500; scannerTimer = setInterval(captureFrame, currentScanIntervalMs);
-
-      scannerBadge.textContent = "Scanner on";
-      scannerBadge.className = "badge live";
-
-      startScannerBtn.disabled = true;
-      stopScannerBtn.disabled = false;
-    }
-
-    function stopScanner() {
-      if (scannerTimer) {
-        clearInterval(scannerTimer);
-        scannerTimer = null;
-      }
-
-      scannerBadge.textContent = "Scanner off";
-      scannerBadge.className = "badge";
-
-      startScannerBtn.disabled = false;
-      stopScannerBtn.disabled = true;
     }
 
     goBtn.addEventListener("click", navigate);
@@ -582,31 +307,68 @@
     });
 
     backBtn.addEventListener("click", function() {
-      if (webview.canGoBack && webview.canGoBack()) webview.goBack();
+      window.vtb.back();
     });
 
     forwardBtn.addEventListener("click", function() {
-      if (webview.canGoForward && webview.canGoForward()) webview.goForward();
+      window.vtb.forward();
     });
 
     reloadBtn.addEventListener("click", function() {
-      webview.reload();
+      window.vtb.reload();
     });
 
-    startScannerBtn.addEventListener("click", startScanner);
-    stopScannerBtn.addEventListener("click", stopScanner);
-
-    webview.addEventListener("did-navigate", function(event) {
-      if (event.url) urlInput.value = event.url;
+    startScannerBtn.addEventListener("click", async function() {
+      const state = await window.vtb.startCapture();
+      setScannerRunning(true);
+      updatePhaseDisplay(state);
     });
 
-    webview.addEventListener("did-navigate-in-page", function(event) {
-      if (event.url) urlInput.value = event.url;
+    stopScannerBtn.addEventListener("click", async function() {
+      const state = await window.vtb.stopCapture();
+      setScannerRunning(false);
+      updatePhaseDisplay(state);
     });
 
-    setInterval(updatePhase, 250);
-    updatePhase();
+    window.vtb.onNavigationState(function(state) {
+      if (state && state.url) {
+        urlInput.value = state.url;
+      }
+
+      backBtn.disabled = !state || !state.canGoBack;
+      forwardBtn.disabled = !state || !state.canGoForward;
+    });
+
+    window.vtb.onCaptureState(function(state) {
+      setScannerRunning(Boolean(state.running));
+      updatePhaseDisplay(state);
+    });
+
+    window.vtb.onCaptureFrame(function(frame) {
+      if (!frame.ok) {
+        frameStatus.textContent = "Capture error: " + frame.error;
+        frameStatus.className = "error";
+        return;
+      }
+
+      frameStatus.textContent =
+        "Captured #" + frame.sequence +
+        " at " + frame.capturedAt +
+        " | phase: " + frame.phase;
+      frameStatus.className = "success";
+
+      preview.src = frame.previewDataUrl;
+      preview.style.display = "block";
+
+      frameInfo.innerHTML =
+        "<p>Size: " + frame.imageSize.width + " Ã— " + frame.imageSize.height + "</p>" +
+        "<p>Saved: " + frame.savedPath + "</p>";
+    });
+
+    window.vtb.getCaptureState().then(function(state) {
+      setScannerRunning(Boolean(state.running));
+      updatePhaseDisplay(state);
+    });
   </script>
 </body>
 </html>
-
