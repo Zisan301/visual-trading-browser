@@ -302,7 +302,7 @@
     </div>
 
     <div class="card">
-      <h2>Latest captured frame</h2>
+      <h2>Latest chart-only frame</h2>
       <p id="frameStatus" class="muted">No frame captured yet.</p>
       <img id="preview" class="preview" style="display:none;" />
       <div id="frameInfo" class="small-info"></div>
@@ -500,7 +500,8 @@
       preview.style.display = "block";
 
       frameInfo.innerHTML =
-        "<p>Size: " + frame.imageSize.width + " x " + frame.imageSize.height + "</p>" +
+        "<p>Chart crop size: " + frame.imageSize.width + " x " + frame.imageSize.height + "</p>" +
+        "<p>Crop rect: x=" + frame.captureRect.x + ", y=" + frame.captureRect.y + ", w=" + frame.captureRect.width + ", h=" + frame.captureRect.height + "</p>" +
         "<p>Saved: " + frame.savedPath + "</p>";
     });
 
@@ -516,3 +517,4 @@
   </script>
 </body>
 </html>
+

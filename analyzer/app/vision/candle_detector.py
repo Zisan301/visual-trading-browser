@@ -14,8 +14,8 @@ class CandleDetectorConfig:
     min_candle_height_px: int = 8
     min_candle_width_px: int = 2
     min_colored_pixels_per_column: int = 2
-    max_gap_between_columns_px: int = 4
-    merge_nearby_groups_px: int = 5
+    max_gap_between_columns_px: int = 1
+    merge_nearby_groups_px: int = 0
 
 
 class VisualCandleDetector:
@@ -162,6 +162,10 @@ class VisualCandleDetector:
         if range_px < self.config.min_candle_height_px:
             return None
 
+        image_height = combined_mask.shape[0]
+        if range_px > image_height * 0.72 and group_width <= 8:
+            return None
+
         bullish_pixels = int(np.count_nonzero(bullish_mask[:, x1 : x2 + 1] > 0))
         bearish_pixels = int(np.count_nonzero(bearish_mask[:, x1 : x2 + 1] > 0))
 
@@ -256,3 +260,5 @@ class VisualCandleDetector:
         avg_candle_conf = sum(item.detection_confidence for item in candles) / len(candles)
         count_score = min(len(candles) / 30.0, 1.0)
         return float(max(0.0, min(1.0, 0.7 * avg_candle_conf + 0.3 * count_score)))
+
+

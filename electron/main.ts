@@ -15,6 +15,22 @@ const DASHBOARD_WIDTH = 390;
 const MIN_PLATFORM_WIDTH = 700;
 const CAPTURE_PARTITION = "persist:visual-trading-browser-platform";
 
+type CaptureRegionRatio = {
+  xRatio: number;
+  yRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+};
+
+const DEFAULT_CHART_REGION: CaptureRegionRatio = {
+  // Quotex focused candle-chart crop.
+  // Moves right/down to remove left menu, payout line, and top overlays.
+  xRatio: 0.14,
+  yRatio: 0.19,
+  widthRatio: 0.53,
+  heightRatio: 0.68
+};
+
 type TimingPhase = "WAITING" | "OBSERVING" | "FORMING_SCAN" | "LOCK_WINDOW";
 
 type CaptureState = {
@@ -90,6 +106,31 @@ function getPlatformHost() {
   } catch {
     return "unknown";
   }
+}
+
+function getChartCaptureRect(): Rectangle {
+  if (!platformView) {
+    return {
+      x: 0,
+      y: 0,
+      width: 640,
+      height: 360
+    };
+  }
+
+  const bounds = platformView.getBounds();
+
+  const x = Math.max(0, Math.floor(bounds.width * DEFAULT_CHART_REGION.xRatio));
+  const y = Math.max(0, Math.floor(bounds.height * DEFAULT_CHART_REGION.yRatio));
+  const width = Math.max(240, Math.floor(bounds.width * DEFAULT_CHART_REGION.widthRatio));
+  const height = Math.max(160, Math.floor(bounds.height * DEFAULT_CHART_REGION.heightRatio));
+
+  return {
+    x,
+    y,
+    width: Math.min(width, bounds.width - x),
+    height: Math.min(height, bounds.height - y)
+  };
 }
 
 function getTimingPhase(second: number | null): TimingPhase {
@@ -314,13 +355,14 @@ async function captureOnce() {
   captureInFlight = true;
 
   try {
-    const image = await platformView.webContents.capturePage();
+    const captureRect = getChartCaptureRect();
+    const image = await platformView.webContents.capturePage(captureRect);
     const imageSize = image.getSize();
     const pngBuffer = image.toPNG();
     const captureDir = getCaptureDir();
 
     captureSequence += 1;
-    latestCapturePath = path.join(captureDir, "latest-platform-capture.png");
+    latestCapturePath = path.join(captureDir, "latest-chart-capture.png");
     fs.writeFileSync(latestCapturePath, pngBuffer);
 
     const capturedAt = new Date().toISOString();
@@ -346,6 +388,7 @@ async function captureOnce() {
       candleRemaining: state.candleRemaining,
       intervalMs: lastCaptureIntervalMs,
       savedPath: latestCapturePath,
+      captureRect,
       analyzerSent,
       previewDataUrl: image.resize({ width: 360 }).toDataURL()
     });
@@ -453,3 +496,6 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+
+
