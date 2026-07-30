@@ -1,24 +1,11 @@
 ﻿# Visual Trading Browser
 
-Prediction-only custom browser for visual candle analysis.
+Prediction-only custom desktop browser for visual candle analysis.
 
-## M1 Features
+Current phase: M2.1 Electron scanner connected to local FastAPI/OpenCV analyzer.
 
-- Electron browser shell
-- Remote platform website view
-- Local analyzer dashboard
-- Automatic visual capture loop
-- Basic 1-minute timing phase display
-- Safe architecture: no auto-trading, no credential extraction, no private API access
+Run analyzer setup once: npm run analyzer:setup
+Run analyzer server: npm run analyzer:dev
+Test analyzer: npm run analyzer:health
+Run app: npm run dev
 
-## Run
-
-npm run dev
-
-## Current phase
-
-M1: browser shell + automatic capture.
-
-## Next phase
-
-M2: Python FastAPI + OpenCV candle detector.

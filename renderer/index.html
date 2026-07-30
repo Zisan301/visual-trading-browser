@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -62,6 +62,12 @@
       border-color: #22c55e;
       color: #bbf7d0;
       background: rgba(34, 197, 94, 0.12);
+    }
+
+    .badge.warn {
+      border-color: #f59e0b;
+      color: #fde68a;
+      background: rgba(245, 158, 11, 0.12);
     }
 
     label {
@@ -157,6 +163,20 @@
 
     .error { color: #fecaca; }
     .success { color: #bbf7d0; }
+    .warning { color: #fde68a; }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 10px;
+      color: #cbd5e1;
+      font-size: 12px;
+      max-height: 180px;
+      overflow: auto;
+    }
   </style>
 </head>
 
@@ -165,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">Secure M1 shell â€” platform is isolated in a separate WebContentsView.</p>
+        <p class="muted">M2.1 - Electron scanner connected to local Python analyzer.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -190,13 +210,65 @@
     <div class="card">
       <h2>Scanner</h2>
       <p class="muted">
-        This M1 scanner captures the isolated platform view only for local preview/evidence. It does not click CALL/PUT, place trades, read cookies, or send frames to Python yet.
+        Captures the isolated platform view and sends frames to the local FastAPI/OpenCV analyzer. It does not click CALL/PUT, place trades, read cookies, or use private platform APIs.
       </p>
 
       <div class="button-grid">
         <button id="startScannerBtn">Start scanner</button>
         <button id="stopScannerBtn" disabled>Stop scanner</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Analyzer connection</h2>
+
+      <div class="metric">
+        <span>Status</span>
+        <strong id="analyzerStatus">OFF</strong>
+      </div>
+
+      <div class="metric">
+        <span>URL</span>
+        <strong id="analyzerUrl">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Last sequence</span>
+        <strong id="analyzerSequence">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Last message</span>
+        <strong id="analyzerLastMessage">--</strong>
+      </div>
+
+      <p id="analyzerError" class="small-info"></p>
+    </div>
+
+    <div class="card">
+      <h2>Live detector result</h2>
+
+      <div class="metric">
+        <span>Chart found</span>
+        <strong id="chartFound">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Candles detected</span>
+        <strong id="candleCount">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Detector confidence</span>
+        <strong id="detectorConfidence">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Current candle</span>
+        <strong id="currentCandleDirection">--</strong>
+      </div>
+
+      <pre id="detectorWarnings">No analyzer result yet.</pre>
     </div>
 
     <div class="card">
@@ -223,9 +295,9 @@
       </div>
 
       <div class="phase-list">
-        <div id="phaseObserve">00â€“40s: observe current candle</div>
-        <div id="phaseForming">40â€“55s: detect forming strategy</div>
-        <div id="phaseLock">55â€“59s: lock prediction window</div>
+        <div id="phaseObserve">00-40s: observe current candle</div>
+        <div id="phaseForming">40-55s: detect forming strategy</div>
+        <div id="phaseLock">55-59s: lock prediction window</div>
       </div>
     </div>
 
@@ -248,6 +320,18 @@
     const startScannerBtn = document.getElementById("startScannerBtn");
     const stopScannerBtn = document.getElementById("stopScannerBtn");
     const scannerBadge = document.getElementById("scannerBadge");
+
+    const analyzerStatus = document.getElementById("analyzerStatus");
+    const analyzerUrl = document.getElementById("analyzerUrl");
+    const analyzerSequence = document.getElementById("analyzerSequence");
+    const analyzerLastMessage = document.getElementById("analyzerLastMessage");
+    const analyzerError = document.getElementById("analyzerError");
+
+    const chartFound = document.getElementById("chartFound");
+    const candleCount = document.getElementById("candleCount");
+    const detectorConfidence = document.getElementById("detectorConfidence");
+    const currentCandleDirection = document.getElementById("currentCandleDirection");
+    const detectorWarnings = document.getElementById("detectorWarnings");
 
     const candleRemaining = document.getElementById("candleRemaining");
     const currentSecond = document.getElementById("currentSecond");
@@ -288,6 +372,57 @@
       stopScannerBtn.disabled = !running;
     }
 
+    function updateAnalyzerStatus(status) {
+      analyzerUrl.textContent = status && status.url ? status.url : "--";
+      analyzerSequence.textContent = status && status.lastSequence !== null && status.lastSequence !== undefined
+        ? String(status.lastSequence)
+        : "--";
+      analyzerLastMessage.textContent = status && status.lastMessageAt ? status.lastMessageAt : "--";
+
+      if (!status || !status.enabled) {
+        analyzerStatus.textContent = "OFF";
+        analyzerStatus.className = "";
+      } else if (status.connected) {
+        analyzerStatus.textContent = "CONNECTED";
+        analyzerStatus.className = "success";
+      } else if (status.connecting) {
+        analyzerStatus.textContent = "CONNECTING";
+        analyzerStatus.className = "warning";
+      } else {
+        analyzerStatus.textContent = "DISCONNECTED";
+        analyzerStatus.className = "error";
+      }
+
+      analyzerError.textContent = status && status.lastError ? "Last error: " + status.lastError : "";
+    }
+
+    function updateAnalyzerResult(result) {
+      if (!result || result.type === "ANALYSIS_ERROR") {
+        detectorWarnings.textContent = result ? JSON.stringify(result, null, 2) : "Analyzer returned empty result.";
+        return;
+      }
+
+      const detector = result.detector || {};
+      const current = result.current_candle || result.currentCandle || null;
+
+      chartFound.textContent = detector.chart_found === true ? "YES" : detector.chart_found === false ? "NO" : "--";
+      candleCount.textContent = detector.candle_count !== undefined ? String(detector.candle_count) : "--";
+      detectorConfidence.textContent = detector.confidence !== undefined
+        ? String(Math.round(Number(detector.confidence) * 100)) + "%"
+        : "--";
+      currentCandleDirection.textContent = current && current.direction ? current.direction : "--";
+
+      const warnings = detector.warnings && detector.warnings.length
+        ? detector.warnings
+        : ["No warnings"];
+
+      detectorWarnings.textContent = JSON.stringify({
+        sequence: result.sequence,
+        warnings,
+        current_candle: current
+      }, null, 2);
+    }
+
     async function navigate() {
       try {
         const result = await window.vtb.navigate(urlInput.value);
@@ -322,12 +457,14 @@
       const state = await window.vtb.startCapture();
       setScannerRunning(true);
       updatePhaseDisplay(state);
+      if (state.analyzer) updateAnalyzerStatus(state.analyzer);
     });
 
     stopScannerBtn.addEventListener("click", async function() {
       const state = await window.vtb.stopCapture();
       setScannerRunning(false);
       updatePhaseDisplay(state);
+      if (state.analyzer) updateAnalyzerStatus(state.analyzer);
     });
 
     window.vtb.onNavigationState(function(state) {
@@ -354,21 +491,28 @@
       frameStatus.textContent =
         "Captured #" + frame.sequence +
         " at " + frame.capturedAt +
-        " | phase: " + frame.phase;
-      frameStatus.className = "success";
+        " | phase: " + frame.phase +
+        " | analyzer sent: " + (frame.analyzerSent ? "yes" : "no");
+
+      frameStatus.className = frame.analyzerSent ? "success" : "warning";
 
       preview.src = frame.previewDataUrl;
       preview.style.display = "block";
 
       frameInfo.innerHTML =
-        "<p>Size: " + frame.imageSize.width + " Ã— " + frame.imageSize.height + "</p>" +
+        "<p>Size: " + frame.imageSize.width + " x " + frame.imageSize.height + "</p>" +
         "<p>Saved: " + frame.savedPath + "</p>";
     });
+
+    window.vtb.onAnalyzerStatus(updateAnalyzerStatus);
+    window.vtb.onAnalyzerResult(updateAnalyzerResult);
 
     window.vtb.getCaptureState().then(function(state) {
       setScannerRunning(Boolean(state.running));
       updatePhaseDisplay(state);
     });
+
+    window.vtb.getAnalyzerStatus().then(updateAnalyzerStatus);
   </script>
 </body>
 </html>
