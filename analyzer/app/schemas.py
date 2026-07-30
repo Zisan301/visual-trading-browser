@@ -56,3 +56,4 @@ class AnalysisResponse(BaseModel):
     timing: dict[str, Any] = Field(default_factory=dict)
     market: dict[str, Any] = Field(default_factory=dict)
     signals: list[dict[str, Any]] = Field(default_factory=list)
+    tracking: dict[str, Any] = Field(default_factory=dict)

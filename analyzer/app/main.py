@@ -8,13 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from analyzer.app.capture.frame_receiver import FrameDecodeError, decode_base64_image, decode_image_bytes
 from analyzer.app.capture.frame_validator import FrameValidationError, validate_frame
-from analyzer.app.schemas import FrameMetadata
+from analyzer.app.schemas import AnalysisResponse, FrameMetadata
+from analyzer.app.tracking.candle_tracker import LiveCandleTracker
 from analyzer.app.vision.candle_detector import VisualCandleDetector
 
 app = FastAPI(
     title="Visual Trading Browser Analyzer",
-    version="0.2.0",
-    description="M2 FastAPI + OpenCV visual candle detector. Prediction-only. No trading actions.",
+    version="0.2.4",
+    description="M2.4 FastAPI + OpenCV visual candle detector with live candle tracker. Prediction-only. No trading actions.",
 )
 
 app.add_middleware(
@@ -26,6 +27,7 @@ app.add_middleware(
 )
 
 _detector = VisualCandleDetector()
+_tracker = LiveCandleTracker()
 
 
 @app.get("/health")
@@ -33,7 +35,7 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "service": "visual-trading-browser-analyzer",
-        "phase": "M2_FASTAPI_OPENCV_DETECTOR",
+        "phase": "M2_4_LIVE_CANDLE_TRACKER",
         "prediction_only": True,
         "auto_trade": False,
     }
@@ -50,7 +52,7 @@ async def analyze_frame(
         raw = await file.read()
         image = decode_image_bytes(raw)
         validate_frame(image)
-        result = _detector.analyze_image(image, sequence=metadata.frame_sequence)
+        result = _analyze_and_track(image, sequence=metadata.frame_sequence)
         return result.model_dump()
     except (FrameDecodeError, FrameValidationError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -71,7 +73,7 @@ async def websocket_analyze(websocket: WebSocket) -> None:
             try:
                 image, metadata = _decode_websocket_message(message, sequence)
                 validate_frame(image)
-                result = _detector.analyze_image(image, sequence=metadata.frame_sequence)
+                result = _analyze_and_track(image, sequence=metadata.frame_sequence)
                 await websocket.send_json(result.model_dump())
             except Exception as exc:
                 await websocket.send_json(
@@ -84,6 +86,11 @@ async def websocket_analyze(websocket: WebSocket) -> None:
                 )
     except WebSocketDisconnect:
         return
+
+
+def _analyze_and_track(image: Any, sequence: int) -> AnalysisResponse:
+    result = _detector.analyze_image(image, sequence=sequence)
+    return _tracker.update(result)
 
 
 def _parse_metadata(metadata_json: str | None) -> FrameMetadata:

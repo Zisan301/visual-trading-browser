@@ -419,6 +419,7 @@
       detectorWarnings.textContent = JSON.stringify({
         sequence: result.sequence,
         warnings,
+        tracking: result.tracking || null,
         current_candle: current
       }, null, 2);
     }
@@ -517,4 +518,6 @@
   </script>
 </body>
 </html>
+
+
 
