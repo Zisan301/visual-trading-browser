@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
@@ -14,7 +14,7 @@ class TimingMachineMemory:
 
 
 class TimingStateMachine:
-    machine = "M2_5_TIMING_STATE_MACHINE"
+    machine = "M2_6_TIMING_STATE_MACHINE"
 
     def __init__(self) -> None:
         self.memory = TimingMachineMemory()
@@ -60,6 +60,7 @@ class TimingStateMachine:
         return {
             "machine": self.machine,
             "state": state,
+            "phase": state,
             "cycle_number": self.memory.cycle_number,
             "sequence": int(sequence),
             "active_candle_id": active_candle_id,
@@ -105,3 +106,6 @@ class TimingStateMachine:
         if second >= 40:
             return "FORMING_SCAN"
         return "OBSERVING"
+
+
+

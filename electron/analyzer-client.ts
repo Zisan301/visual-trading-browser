@@ -5,7 +5,7 @@
  */
 function withAnalyzerTimingMetadata(data: any): any {
   if (!data || typeof data !== "object") {
-    return withAnalyzerTimingMetadata(data);
+    return data;
   }
 
   const timing = data.analyzer_timing ?? null;
@@ -36,6 +36,8 @@ export type AnalyzerFramePayload = {
   timeframe: string;
   capturedAt: string;
   phase: string;
+  candleSecond?: number | null;
+  candleRemaining?: number | null;
   imageBase64: string;
 };
 
@@ -137,8 +139,9 @@ export class AnalyzerClient {
         asset: frame.asset,
         timeframe: frame.timeframe,
         captured_at: frame.capturedAt,
-        phase: frame.phase
-      },
+        phase: frame.phase,
+        candle_second: frame.candleSecond ?? null,
+        candle_remaining: frame.candleRemaining ?? null},
       image_base64: frame.imageBase64
     };
 
@@ -201,7 +204,7 @@ export class AnalyzerClient {
         }
 
         for (const listener of this.resultListeners) {
-          listener(payload);
+          listener(withAnalyzerTimingMetadata(payload));
         }
       } catch (error) {
         this.setStatus({
@@ -254,4 +257,7 @@ export class AnalyzerClient {
     }
   }
 }
+
+
+
 

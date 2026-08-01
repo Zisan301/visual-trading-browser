@@ -47,6 +47,9 @@ $schemaAnalyzerTiming = HasText "analyzer/app/schemas.py" "analyzer_timing"
 $electronSecond = HasText "electron/main.ts" "candleSecond"
 $clientSecond = HasText "electron/analyzer-client.ts" "candle_second"
 $rendererTiming = HasText "renderer/index.html" "analyzer_timing"
+$predictionLockFile = Exists "analyzer/app/prediction/prediction_lock.py"
+$mainPredictionLock = HasText "analyzer/app/main.py" "PredictionLockManager"
+$rendererPredictionLock = HasText "renderer/index.html" "predictionLockStatus"
 
 $next = @()
 
@@ -56,10 +59,12 @@ if ($mainM25 -ne "YES" -or $mainTiming -ne "YES" -or $timingInstance -ne "YES") 
 if ($schemaSecond -ne "YES" -or $schemaRemain -ne "YES" -or $schemaAnalyzerTiming -ne "YES") { $next += "Fix analyzer/app/schemas.py metadata/analyzer_timing fields." }
 if ($electronSecond -ne "YES" -or $clientSecond -ne "YES") { $next += "Fix Electron timing metadata passthrough." }
 if ($rendererTiming -ne "YES") { $next += "Fix dashboard analyzer_timing display." }
-if ($health -notmatch "M2_5_TIMING_STATE_MACHINE") { $next += "Restart analyzer or finish health phase M2.5 wiring." }
+if ($predictionLockFile -ne "YES" -or $mainPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock backend wiring." }
+if ($rendererPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock dashboard display." }
+if ($health -notmatch "M2_6_PREDICTION_LOCK_WINDOW") { $next += "Restart analyzer or finish health phase M2.6 wiring." }
 
 if ($next.Count -eq 0) {
-    $next += "M2.5 looks structurally complete. Next live-test OBSERVING -> FORMING_SCAN -> LOCK_WINDOW/LOCKED, then continue M2.6/M3 strategy placeholder."
+    $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
 }
 
 $nextText = ($next | ForEach-Object { "- $_" }) -join "`n"
@@ -94,6 +99,11 @@ electron/main.ts candleSecond: $electronSecond
 electron/analyzer-client.ts candle_second: $clientSecond
 renderer/index.html analyzer_timing: $rendererTiming
 
+M2.6 checks:
+prediction_lock.py: $predictionLockFile
+main.py PredictionLockManager: $mainPredictionLock
+renderer/index.html predictionLockStatus: $rendererPredictionLock
+
 NEXT CONTINUATION TASK:
 $nextText
 
@@ -110,3 +120,4 @@ Continue from docs/CHATGPT_PROJECT_STATE.md
 
 $report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
 Write-Host $report
+
