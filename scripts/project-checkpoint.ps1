@@ -50,6 +50,9 @@ $rendererTiming = HasText "renderer/index.html" "analyzer_timing"
 $predictionLockFile = Exists "analyzer/app/prediction/prediction_lock.py"
 $mainPredictionLock = HasText "analyzer/app/main.py" "PredictionLockManager"
 $rendererPredictionLock = HasText "renderer/index.html" "predictionLockStatus"
+$strategyScoringFile = Exists "analyzer/app/prediction/strategy_scoring.py"
+$predictionLockStrategy = HasText "analyzer/app/prediction/prediction_lock.py" "StrategyScoringEngine"
+$rendererStrategyScore = HasText "renderer/index.html" "lockedStrategyScore"
 
 $next = @()
 
@@ -61,7 +64,9 @@ if ($electronSecond -ne "YES" -or $clientSecond -ne "YES") { $next += "Fix Elect
 if ($rendererTiming -ne "YES") { $next += "Fix dashboard analyzer_timing display." }
 if ($predictionLockFile -ne "YES" -or $mainPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock backend wiring." }
 if ($rendererPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock dashboard display." }
-if ($health -notmatch "M2_6_PREDICTION_LOCK_WINDOW") { $next += "Restart analyzer or finish health phase M2.6 wiring." }
+if ($strategyScoringFile -ne "YES" -or $predictionLockStrategy -ne "YES") { $next += "Fix M2.7 strategy scoring backend wiring." }
+if ($rendererStrategyScore -ne "YES") { $next += "Fix M2.7 strategy score dashboard display." }
+if ($health -notmatch "M2_7_STRATEGY_SCORING_PLACEHOLDER") { $next += "Restart analyzer or finish health phase M2.6 wiring." }
 
 if ($next.Count -eq 0) {
     $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
@@ -104,6 +109,11 @@ prediction_lock.py: $predictionLockFile
 main.py PredictionLockManager: $mainPredictionLock
 renderer/index.html predictionLockStatus: $rendererPredictionLock
 
+M2.7 checks:
+strategy_scoring.py: $strategyScoringFile
+prediction_lock.py StrategyScoringEngine: $predictionLockStrategy
+renderer/index.html lockedStrategyScore: $rendererStrategyScore
+
 NEXT CONTINUATION TASK:
 $nextText
 
@@ -120,4 +130,5 @@ Continue from docs/CHATGPT_PROJECT_STATE.md
 
 $report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
 Write-Host $report
+
 
