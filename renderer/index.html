@@ -165,6 +165,67 @@
     .success { color: #bbf7d0; }
     .warning { color: #fde68a; }
 
+
+    .signal-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+
+    .signal-table th,
+    .signal-table td {
+      border-bottom: 1px solid #1e293b;
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .signal-table th {
+      color: #94a3b8;
+      font-weight: 600;
+    }
+
+    .signal-table td {
+      color: #e5e7eb;
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 3px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+
+    .pill-win {
+      border-color: #22c55e;
+      color: #bbf7d0;
+      background: rgba(34, 197, 94, 0.12);
+    }
+
+    .pill-loss {
+      border-color: #ef4444;
+      color: #fecaca;
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .pill-pending {
+      border-color: #f59e0b;
+      color: #fde68a;
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .pill-draw {
+      border-color: #38bdf8;
+      color: #bae6fd;
+      background: rgba(56, 189, 248, 0.12);
+    }
+
     pre {
       white-space: pre-wrap;
       word-break: break-word;
@@ -185,7 +246,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M3.0 - Stable signal panel for locked, pending, and resolved predictions.</p>
+        <p class="muted">M3.1 - Clean signal table UI for recent locked predictions.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -250,6 +311,31 @@
       </div>
 
       <pre id="stableSignalDetails">No stable signal summary yet.</pre>
+    </div>
+    <div class="card" id="signalTableCard">
+      <h2>Recent signal table</h2>
+
+      <div class="metric">
+        <span>Rows shown</span>
+        <strong id="signalTableRows">0</strong>
+      </div>
+
+      <table class="signal-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Decision</th>
+            <th>Conf.</th>
+            <th>Result</th>
+            <th>Candle</th>
+          </tr>
+        </thead>
+        <tbody id="signalTableBody">
+          <tr>
+            <td colspan="5">No locked signals yet.</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
     <div class="card" id="signalHistoryCard">
       <h2>Signal history tracker</h2>
@@ -899,8 +985,84 @@
 </script>
 <!-- M3.0 Stable Signal Panel Script END -->
 
+
+<!-- M3.1 Signal Table Script START -->
+<script>
+(function() {
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function pct(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n * 100)) + "%";
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "--")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function resultClass(result) {
+    const r = String(result || "PENDING").toUpperCase();
+    if (r === "WIN") return "pill pill-win";
+    if (r === "LOSS") return "pill pill-loss";
+    if (r === "DRAW") return "pill pill-draw";
+    return "pill pill-pending";
+  }
+
+  window.updateSignalTable = function(result) {
+    const market = result && result.market ? result.market : {};
+    const history = market.signal_history || {};
+    const rows = Array.isArray(history.recent_signals) ? history.recent_signals : [];
+    const body = document.getElementById("signalTableBody");
+
+    setText("signalTableRows", String(rows.length));
+
+    if (!body) return;
+
+    if (!rows.length) {
+      body.innerHTML = '<tr><td colspan="5">No locked signals yet.</td></tr>';
+      return;
+    }
+
+    body.innerHTML = rows.map(function(signal, index) {
+      const decision = escapeHtml(signal.decision || "--");
+      const confidence = escapeHtml(signal.confidence !== undefined ? pct(signal.confidence) : "--");
+      const resultText = escapeHtml(signal.result || "PENDING");
+      const candle = escapeHtml(signal.candle_id || "--");
+      const rowNo = String(index + 1);
+
+      return (
+        "<tr>" +
+          "<td>" + rowNo + "</td>" +
+          "<td>" + decision + "</td>" +
+          "<td>" + confidence + "</td>" +
+          "<td><span class=\"" + resultClass(signal.result) + "\">" + resultText + "</span></td>" +
+          "<td>" + candle + "</td>" +
+        "</tr>"
+      );
+    }).join("");
+  };
+
+  if (window.vtb && typeof window.vtb.onAnalyzerResult === "function") {
+    window.vtb.onAnalyzerResult(function(result) {
+      window.updateSignalTable(result);
+    });
+  }
+})();
+</script>
+<!-- M3.1 Signal Table Script END -->
+
 </body>
 </html>
+
 
 
 
