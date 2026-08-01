@@ -1,25 +1,23 @@
 ﻿=== Visual Trading Browser Checkpoint ===
 
 Last updated:
-2026-08-01 23:31:04 +06:00
+2026-08-01 23:37:34 +06:00
 
 Current branch:
-m3.0-stable-signal-panel
+m3.1-signal-table-ui
 
 Git status:
  M analyzer/app/main.py
- M analyzer/app/prediction/signal_history.py
  M renderer/index.html
  M scripts/project-checkpoint.ps1
-?? analyzer/app/main.py.bak.fix-m30.20260801_232545
-?? analyzer/app/main.py.bak.m30.20260801_232120
-?? analyzer/app/prediction/signal_history.py.bak.fix-m30.20260801_232545
-?? analyzer/app/prediction/signal_history.py.bak.m30.20260801_232120
-?? renderer/index.html.bak.m30.20260801_232120
-?? scripts/project-checkpoint.ps1.bak.m30.20260801_232120
+?? analyzer/app/main.py.bak.m31.20260801_233254
+?? renderer/index.html.bak.m31.20260801_233254
+?? scripts/project-checkpoint.ps1.bak.m31.20260801_233254
 
 Recent commits:
-b18dbc7 (HEAD -> m3.0-stable-signal-panel, origin/main, origin/m3.0-stable-signal-panel, origin/HEAD, main) Merge M2.9 candle outcome resolver
+101c326 (HEAD -> m3.1-signal-table-ui, origin/main, origin/m3.1-signal-table-ui, origin/HEAD, main) Merge M3.0 stable signal panel
+d382909 (origin/m3.0-stable-signal-panel, m3.0-stable-signal-panel) Add M3.0 stable signal panel
+b18dbc7 Merge M2.9 candle outcome resolver
 869d08a (origin/m2.9-candle-outcome-resolver, m2.9-candle-outcome-resolver) Add M2.9 candle outcome resolver
 a28285f Merge M2.8 signal history tracker
 07f55db (origin/m2.8-signal-history-tracker, m2.8-signal-history-tracker) Add M2.8 signal history tracker
@@ -27,8 +25,6 @@ df5e455 Merge M2.7 strategy scoring placeholder
 e407a25 (origin/m2.7-strategy-scoring-placeholder, m2.7-strategy-scoring-placeholder) Update checkpoint for M2.7
 d361416 Add M2.7 strategy scoring placeholder
 3892fda Merge M2.6 prediction lock window
-9a6897a (origin/m2.6-prediction-lock-window, m2.6-prediction-lock-window) Add M2.6 prediction lock window
-3813ec8 Add M2.6 prediction lock window
 
 Analyzer health:
 Analyzer not running. Start with: npm run analyzer:dev
@@ -67,11 +63,16 @@ renderer/index.html accuracyPercent: YES
 
 M3.0 checks:
 main.py M3.0 phase: YES
-signal_history.py panel summary: YES
+signal_history.py panel summary: NO
 renderer/index.html stableSignalPanelCard: YES
+
+M3.1 checks:
+main.py M3.1 phase: YES
+renderer/index.html signalTableCard: YES
 
 NEXT CONTINUATION TASK:
 - Uncommitted changes exist. Test, then commit/push.
+- Fix M3.0 stable signal backend summary.
 - Restart analyzer or finish health phase M2.7 wiring.
 
 Important file:
