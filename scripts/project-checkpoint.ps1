@@ -38,7 +38,7 @@ try {
 }
 
 $timingFile = Exists "analyzer/app/prediction/timing_state_machine.py"
-$mainM25 = HasText "analyzer/app/main.py" "M2_9_CANDLE_OUTCOME_RESOLVER"
+$mainM25 = HasText "analyzer/app/main.py" "M3_0_STABLE_SIGNAL_PANEL"
 $mainTiming = HasText "analyzer/app/main.py" "TimingStateMachine"
 $timingInstance = HasText "analyzer/app/main.py" "_timing_machine = TimingStateMachine()"
 $schemaSecond = HasText "analyzer/app/schemas.py" "candle_second"
@@ -59,6 +59,9 @@ $rendererSignalHistory = HasText "renderer/index.html" "signalHistoryCard"
 $outcomeResolverFile = Exists "analyzer/app/prediction/candle_outcome_resolver.py"
 $signalHistoryResolver = HasText "analyzer/app/prediction/signal_history.py" "CandleOutcomeResolver"
 $rendererOutcomeAccuracy = HasText "renderer/index.html" "accuracyPercent"
+$mainM30 = HasText "analyzer/app/main.py" "M3_0_STABLE_SIGNAL_PANEL"
+$historyM30 = HasText "analyzer/app/prediction/signal_history.py" "M3_0_STABLE_SIGNAL_PANEL"
+$rendererM30 = HasText "renderer/index.html" "stableSignalPanelCard"
 
 $next = @()
 
@@ -76,7 +79,9 @@ if ($signalHistoryFile -ne "YES" -or $mainSignalHistory -ne "YES") { $next += "F
 if ($rendererSignalHistory -ne "YES") { $next += "Fix M2.8 signal history dashboard display." }
 if ($outcomeResolverFile -ne "YES" -or $signalHistoryResolver -ne "YES") { $next += "Fix M2.9 candle outcome resolver backend wiring." }
 if ($rendererOutcomeAccuracy -ne "YES") { $next += "Fix M2.9 accuracy dashboard display." }
-if ($health -notmatch "M2_9_CANDLE_OUTCOME_RESOLVER") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
+if ($mainM30 -ne "YES" -or $historyM30 -ne "YES") { $next += "Fix M3.0 stable signal backend summary." }
+if ($rendererM30 -ne "YES") { $next += "Fix M3.0 stable signal dashboard panel." }
+if ($health -notmatch "M3_0_STABLE_SIGNAL_PANEL") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
 
 if ($next.Count -eq 0) {
     $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
@@ -134,6 +139,11 @@ candle_outcome_resolver.py: $outcomeResolverFile
 signal_history.py CandleOutcomeResolver: $signalHistoryResolver
 renderer/index.html accuracyPercent: $rendererOutcomeAccuracy
 
+M3.0 checks:
+main.py M3.0 phase: $mainM30
+signal_history.py panel summary: $historyM30
+renderer/index.html stableSignalPanelCard: $rendererM30
+
 NEXT CONTINUATION TASK:
 $nextText
 
@@ -150,6 +160,7 @@ Continue from docs/CHATGPT_PROJECT_STATE.md
 
 $report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
 Write-Host $report
+
 
 
 

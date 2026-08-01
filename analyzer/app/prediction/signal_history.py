@@ -14,7 +14,7 @@ class SignalHistoryMemory:
 
 
 class SignalHistoryTracker:
-    machine = "M2_8_SIGNAL_HISTORY_TRACKER"
+    machine = "M3_0_STABLE_SIGNAL_PANEL"
 
     def __init__(self, max_items: int = 50) -> None:
         self.max_items = max_items
@@ -31,7 +31,10 @@ class SignalHistoryTracker:
         prediction_lock = prediction_lock or {}
         tracking = tracking or {}
 
-        self._remember_current_candle(tracking=tracking, current_candle=current_candle)
+        self._remember_current_candle(
+            tracking=tracking,
+            current_candle=current_candle,
+        )
 
         signal = prediction_lock.get("signal")
         added = self._add_signal(sequence=sequence, signal=signal)
@@ -45,7 +48,9 @@ class SignalHistoryTracker:
 
         recent = list(reversed(self.memory.signals[-10:]))
         last = recent[0] if recent else None
-        accuracy = self._accuracy()
+
+        panel_summary = self._panel_summary()
+        accuracy = self._accuracy(panel_summary)
 
         return {
             "machine": self.machine,
@@ -56,6 +61,7 @@ class SignalHistoryTracker:
             "last_signal": last,
             "recent_signals": recent,
             "accuracy": accuracy,
+            "panel_summary": panel_summary,
             "prediction_only": True,
             "auto_trade": False,
         }
@@ -68,10 +74,7 @@ class SignalHistoryTracker:
         if not current_candle:
             return
 
-        candle_id = (
-            current_candle.get("candle_id")
-            or tracking.get("running_candle_id")
-        )
+        candle_id = current_candle.get("candle_id") or tracking.get("running_candle_id")
 
         if not candle_id:
             return
@@ -79,6 +82,7 @@ class SignalHistoryTracker:
         snapshot = dict(current_candle)
         snapshot["snapshot_source"] = self.machine
         snapshot["running_candle_id"] = str(candle_id)
+
         self.memory.candle_snapshots[str(candle_id)] = snapshot
 
     def _add_signal(self, sequence: int, signal: dict[str, Any] | None) -> bool:
@@ -86,6 +90,7 @@ class SignalHistoryTracker:
             return False
 
         prediction_id = str(signal.get("prediction_id", ""))
+
         if not prediction_id or prediction_id in self.memory.seen_prediction_ids:
             return False
 
@@ -121,7 +126,11 @@ class SignalHistoryTracker:
 
         return True
 
-    def _resolve_closed_candle(self, sequence: int, closed_candle_id: str) -> list[dict[str, Any]]:
+    def _resolve_closed_candle(
+        self,
+        sequence: int,
+        closed_candle_id: str,
+    ) -> list[dict[str, Any]]:
         snapshot = self.memory.candle_snapshots.get(closed_candle_id)
         resolved = []
 
@@ -149,22 +158,85 @@ class SignalHistoryTracker:
 
         return resolved
 
-    def _accuracy(self) -> dict[str, Any]:
-        resolved_records = [
+    def _panel_summary(self) -> dict[str, Any]:
+        total = len(self.memory.signals)
+
+        pending = [
             item for item in self.memory.signals
+            if item.get("result") == "PENDING"
+        ]
+
+        resolved = [
+            item for item in self.memory.signals
+            if item.get("result") not in (None, "PENDING")
+        ]
+
+        wins = [
+            item for item in self.memory.signals
+            if item.get("result") == "WIN"
+        ]
+
+        losses = [
+            item for item in self.memory.signals
+            if item.get("result") == "LOSS"
+        ]
+
+        draws = [
+            item for item in self.memory.signals
+            if item.get("result") == "DRAW"
+        ]
+
+        skipped = [
+            item for item in self.memory.signals
+            if item.get("result") == "SKIPPED"
+        ]
+
+        scored_resolved = [
+            item for item in resolved
             if item.get("is_correct") is not None
         ]
 
-        correct = [item for item in resolved_records if item.get("is_correct") is True]
+        correct = [
+            item for item in scored_resolved
+            if item.get("is_correct") is True
+        ]
 
         accuracy_percent = None
-        if resolved_records:
-            accuracy_percent = round((len(correct) / len(resolved_records)) * 100, 2)
+        if scored_resolved:
+            accuracy_percent = round((len(correct) / len(scored_resolved)) * 100, 2)
+
+        last_locked = self.memory.signals[-1] if self.memory.signals else None
+        last_resolved = resolved[-1] if resolved else None
+        last_pending = pending[-1] if pending else None
 
         return {
-            "status": "READY" if resolved_records else "WAITING_FOR_CLOSED_CANDLE",
-            "resolved": len(resolved_records),
+            "machine": "M3_0_STABLE_SIGNAL_PANEL",
+            "total": total,
+            "pending": len(pending),
+            "resolved": len(resolved),
+            "wins": len(wins),
+            "losses": len(losses),
+            "draws": len(draws),
+            "skipped": len(skipped),
             "correct": len(correct),
             "accuracy_percent": accuracy_percent,
+            "last_locked_signal": last_locked,
+            "last_resolved_signal": last_resolved,
+            "last_pending_signal": last_pending,
+            "prediction_only": True,
+            "auto_trade": False,
+        }
+
+    def _accuracy(self, panel: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "status": "READY" if panel["resolved"] else "WAITING_FOR_CLOSED_CANDLE",
+            "resolved": panel["resolved"],
+            "correct": panel["correct"],
+            "wins": panel["wins"],
+            "losses": panel["losses"],
+            "draws": panel["draws"],
+            "skipped": panel["skipped"],
+            "pending": panel["pending"],
+            "accuracy_percent": panel["accuracy_percent"],
             "note": "Prediction-only accuracy based on tracked candle rollover snapshots.",
         }
