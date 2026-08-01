@@ -185,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M2.9 - Candle outcome resolver connected to signal history tracker.</p>
+        <p class="muted">M3.0 - Stable signal panel for locked, pending, and resolved predictions.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -221,6 +221,36 @@
 
     
     <!-- M2.6 Prediction Lock Card START -->
+    <div class="card" id="stableSignalPanelCard">
+      <h2>Stable signal panel</h2>
+
+      <div class="metric">
+        <span>Last locked</span>
+        <strong id="stableLastLocked">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Last resolved</span>
+        <strong id="stableLastResolved">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Pending signals</span>
+        <strong id="stablePendingSignals">0</strong>
+      </div>
+
+      <div class="metric">
+        <span>Wins / Losses</span>
+        <strong id="stableWinLoss">0 / 0</strong>
+      </div>
+
+      <div class="metric">
+        <span>Stable accuracy</span>
+        <strong id="stableAccuracy">--</strong>
+      </div>
+
+      <pre id="stableSignalDetails">No stable signal summary yet.</pre>
+    </div>
     <div class="card" id="signalHistoryCard">
       <h2>Signal history tracker</h2>
 
@@ -807,8 +837,71 @@
 </script>
 <!-- M2.9 Outcome Resolver Script END -->
 
+
+<!-- M3.0 Stable Signal Panel Script START -->
+<script>
+(function() {
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function pctFraction(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n * 100)) + "%";
+  }
+
+  function pctRaw(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n)) + "%";
+  }
+
+  function compactSignal(signal) {
+    if (!signal) return "--";
+
+    const decision = signal.decision || "--";
+    const result = signal.result || "PENDING";
+    const confidence = signal.confidence !== undefined ? pctFraction(signal.confidence) : "--";
+    const candle = signal.candle_id || "--";
+
+    return decision + " | " + result + " | " + confidence + " | " + candle;
+  }
+
+  window.updateStableSignalPanel = function(result) {
+    const market = result && result.market ? result.market : {};
+    const history = market.signal_history || {};
+    const panel = history.panel_summary || {};
+    const accuracy = history.accuracy || {};
+
+    setText("stableLastLocked", compactSignal(panel.last_locked_signal));
+    setText("stableLastResolved", compactSignal(panel.last_resolved_signal));
+    setText("stablePendingSignals", String(panel.pending ?? accuracy.pending ?? 0));
+    setText("stableWinLoss", String(panel.wins ?? accuracy.wins ?? 0) + " / " + String(panel.losses ?? accuracy.losses ?? 0));
+    setText("stableAccuracy", panel.accuracy_percent !== null && panel.accuracy_percent !== undefined ? pctRaw(panel.accuracy_percent) : "--");
+
+    const details = document.getElementById("stableSignalDetails");
+    if (details) {
+      details.textContent = JSON.stringify({
+        panel_summary: panel,
+        accuracy: accuracy
+      }, null, 2);
+    }
+  };
+
+  if (window.vtb && typeof window.vtb.onAnalyzerResult === "function") {
+    window.vtb.onAnalyzerResult(function(result) {
+      window.updateStableSignalPanel(result);
+    });
+  }
+})();
+</script>
+<!-- M3.0 Stable Signal Panel Script END -->
+
 </body>
 </html>
+
 
 
 
