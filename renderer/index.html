@@ -185,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M2.8 - Signal history tracker connected to prediction lock window.</p>
+        <p class="muted">M2.9 - Candle outcome resolver connected to signal history tracker.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -244,6 +244,25 @@
         <strong id="accuracyStatus">PLACEHOLDER</strong>
       </div>
 
+      <div class="metric">
+        <span>Last result</span>
+        <strong id="lastSignalResult">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Resolved signals</span>
+        <strong id="resolvedSignals">0</strong>
+      </div>
+
+      <div class="metric">
+        <span>Correct signals</span>
+        <strong id="correctSignals">0</strong>
+      </div>
+
+      <div class="metric">
+        <span>Accuracy</span>
+        <strong id="accuracyPercent">--</strong>
+      </div>
       <pre id="signalHistoryDetails">No signal history yet.</pre>
     </div>
     <div class="card" id="predictionLockCard">
@@ -733,8 +752,7 @@
 </script>
 <!-- M2.7 Strategy Score Script END -->
 
-
-<!-- M2.8 Signal History Script START -->
+<!-- M2.9 Outcome Resolver Script START -->
 <script>
 (function() {
   function setText(id, value) {
@@ -748,6 +766,12 @@
     return String(Math.round(n * 100)) + "%";
   }
 
+  function percentRaw(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n)) + "%";
+  }
+
   window.updateSignalHistory = function(result) {
     const market = result && result.market ? result.market : {};
     const history = market.signal_history || {};
@@ -757,11 +781,20 @@
     setText("totalLockedSignals", String(history.total_locked_signals ?? 0));
     setText("lastHistoryDecision", last && last.decision ? last.decision : "--");
     setText("lastHistoryConfidence", last && last.confidence !== undefined ? percent(last.confidence) : "--");
-    setText("accuracyStatus", accuracy.status || "PLACEHOLDER");
+    setText("accuracyStatus", accuracy.status || "WAITING_FOR_CLOSED_CANDLE");
+
+    setText("lastSignalResult", last && last.result ? last.result : "--");
+    setText("resolvedSignals", String(accuracy.resolved ?? 0));
+    setText("correctSignals", String(accuracy.correct ?? 0));
+    setText("accuracyPercent", accuracy.accuracy_percent !== null && accuracy.accuracy_percent !== undefined ? percentRaw(accuracy.accuracy_percent) : "--");
 
     const details = document.getElementById("signalHistoryDetails");
     if (details) {
-      details.textContent = JSON.stringify(history.recent_signals || [], null, 2);
+      details.textContent = JSON.stringify({
+        accuracy,
+        resolved_this_frame: history.resolved_this_frame || [],
+        recent_signals: history.recent_signals || []
+      }, null, 2);
     }
   };
 
@@ -772,10 +805,11 @@
   }
 })();
 </script>
-<!-- M2.8 Signal History Script END -->
+<!-- M2.9 Outcome Resolver Script END -->
 
 </body>
 </html>
+
 
 
 

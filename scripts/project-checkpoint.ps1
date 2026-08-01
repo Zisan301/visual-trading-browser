@@ -38,7 +38,7 @@ try {
 }
 
 $timingFile = Exists "analyzer/app/prediction/timing_state_machine.py"
-$mainM25 = HasText "analyzer/app/main.py" "M2_8_SIGNAL_HISTORY_TRACKER"
+$mainM25 = HasText "analyzer/app/main.py" "M2_9_CANDLE_OUTCOME_RESOLVER"
 $mainTiming = HasText "analyzer/app/main.py" "TimingStateMachine"
 $timingInstance = HasText "analyzer/app/main.py" "_timing_machine = TimingStateMachine()"
 $schemaSecond = HasText "analyzer/app/schemas.py" "candle_second"
@@ -56,6 +56,9 @@ $rendererStrategyScore = HasText "renderer/index.html" "lockedStrategyScore"
 $signalHistoryFile = Exists "analyzer/app/prediction/signal_history.py"
 $mainSignalHistory = HasText "analyzer/app/main.py" "SignalHistoryTracker"
 $rendererSignalHistory = HasText "renderer/index.html" "signalHistoryCard"
+$outcomeResolverFile = Exists "analyzer/app/prediction/candle_outcome_resolver.py"
+$signalHistoryResolver = HasText "analyzer/app/prediction/signal_history.py" "CandleOutcomeResolver"
+$rendererOutcomeAccuracy = HasText "renderer/index.html" "accuracyPercent"
 
 $next = @()
 
@@ -71,7 +74,9 @@ if ($strategyScoringFile -ne "YES" -or $predictionLockStrategy -ne "YES") { $nex
 if ($rendererStrategyScore -ne "YES") { $next += "Fix M2.7 strategy score dashboard display." }
 if ($signalHistoryFile -ne "YES" -or $mainSignalHistory -ne "YES") { $next += "Fix M2.8 signal history backend wiring." }
 if ($rendererSignalHistory -ne "YES") { $next += "Fix M2.8 signal history dashboard display." }
-if ($health -notmatch "M2_8_SIGNAL_HISTORY_TRACKER") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
+if ($outcomeResolverFile -ne "YES" -or $signalHistoryResolver -ne "YES") { $next += "Fix M2.9 candle outcome resolver backend wiring." }
+if ($rendererOutcomeAccuracy -ne "YES") { $next += "Fix M2.9 accuracy dashboard display." }
+if ($health -notmatch "M2_9_CANDLE_OUTCOME_RESOLVER") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
 
 if ($next.Count -eq 0) {
     $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
@@ -124,6 +129,11 @@ signal_history.py: $signalHistoryFile
 main.py SignalHistoryTracker: $mainSignalHistory
 renderer/index.html signalHistoryCard: $rendererSignalHistory
 
+M2.9 checks:
+candle_outcome_resolver.py: $outcomeResolverFile
+signal_history.py CandleOutcomeResolver: $signalHistoryResolver
+renderer/index.html accuracyPercent: $rendererOutcomeAccuracy
+
 NEXT CONTINUATION TASK:
 $nextText
 
@@ -140,6 +150,7 @@ Continue from docs/CHATGPT_PROJECT_STATE.md
 
 $report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
 Write-Host $report
+
 
 
 
