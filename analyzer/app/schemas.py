@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any, Literal
 
@@ -17,6 +17,8 @@ class FrameMetadata(BaseModel):
     timeframe: str = "1m"
     captured_at: str | None = None
     phase: str = "M2_DETECTOR_ONLY"
+    candle_second: int | None = None
+    candle_remaining: int | None = None
 
 
 class VisualCandle(BaseModel):
@@ -54,6 +56,7 @@ class AnalysisResponse(BaseModel):
     candles: list[VisualCandle]
     current_candle: VisualCandle | None = None
     timing: dict[str, Any] = Field(default_factory=dict)
+    analyzer_timing: dict[str, Any] = Field(default_factory=dict)
     market: dict[str, Any] = Field(default_factory=dict)
     signals: list[dict[str, Any]] = Field(default_factory=list)
     tracking: dict[str, Any] = Field(default_factory=dict)
