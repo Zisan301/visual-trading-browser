@@ -1,4 +1,4 @@
-import {
+﻿import {
   app,
   BaseWindow,
   WebContentsView,
@@ -8,11 +8,28 @@ import {
 import type { Rectangle } from "electron";
 import path from "path";
 import fs from "fs";
+import { AnalyzerClient } from "./analyzer-client";
 
 const DEFAULT_HOME_URL = "https://example.com";
 const DASHBOARD_WIDTH = 390;
 const MIN_PLATFORM_WIDTH = 700;
 const CAPTURE_PARTITION = "persist:visual-trading-browser-platform";
+
+type CaptureRegionRatio = {
+  xRatio: number;
+  yRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+};
+
+const DEFAULT_CHART_REGION: CaptureRegionRatio = {
+  // Quotex focused candle-chart crop.
+  // Moves right/down to remove left menu, payout line, and top overlays.
+  xRatio: 0.14,
+  yRatio: 0.19,
+  widthRatio: 0.53,
+  heightRatio: 0.68
+};
 
 type TimingPhase = "WAITING" | "OBSERVING" | "FORMING_SCAN" | "LOCK_WINDOW";
 
@@ -37,6 +54,16 @@ let captureStartedAt: number | null = null;
 let captureSequence = 0;
 let latestCapturePath: string | null = null;
 let lastCaptureIntervalMs = 1000;
+
+const analyzer = new AnalyzerClient();
+
+analyzer.onStatus((status) => {
+  sendDashboard("analyzer:status", status);
+});
+
+analyzer.onResult((result) => {
+  sendDashboard("analyzer:result", result);
+});
 
 function getCaptureDir() {
   const captureDir = path.join(app.getPath("userData"), "captures");
@@ -67,6 +94,43 @@ function normalizeUrl(input: string) {
   }
 
   return new URL(withProtocol).toString();
+}
+
+function getPlatformHost() {
+  if (!platformView) {
+    return "unknown";
+  }
+
+  try {
+    return new URL(platformView.webContents.getURL()).hostname || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function getChartCaptureRect(): Rectangle {
+  if (!platformView) {
+    return {
+      x: 0,
+      y: 0,
+      width: 640,
+      height: 360
+    };
+  }
+
+  const bounds = platformView.getBounds();
+
+  const x = Math.max(0, Math.floor(bounds.width * DEFAULT_CHART_REGION.xRatio));
+  const y = Math.max(0, Math.floor(bounds.height * DEFAULT_CHART_REGION.yRatio));
+  const width = Math.max(240, Math.floor(bounds.width * DEFAULT_CHART_REGION.widthRatio));
+  const height = Math.max(160, Math.floor(bounds.height * DEFAULT_CHART_REGION.heightRatio));
+
+  return {
+    x,
+    y,
+    width: Math.min(width, bounds.width - x),
+    height: Math.min(height, bounds.height - y)
+  };
 }
 
 function getTimingPhase(second: number | null): TimingPhase {
@@ -202,9 +266,16 @@ function createMainWindow() {
   mainWindow.on("resize", resizeViews);
   mainWindow.on("closed", () => {
     stopCaptureLoop();
+    analyzer.stop();
     mainWindow = null;
     dashboardView = null;
     platformView = null;
+  });
+
+  dashboardView.webContents.on("did-finish-load", () => {
+    sendDashboard("capture:state", getCaptureState());
+    sendDashboard("analyzer:status", analyzer.getStatus());
+    emitNavigationState();
   });
 
   dashboardView.webContents.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -284,26 +355,41 @@ async function captureOnce() {
   captureInFlight = true;
 
   try {
-    const image = await platformView.webContents.capturePage();
+    const captureRect = getChartCaptureRect();
+    const image = await platformView.webContents.capturePage(captureRect);
     const imageSize = image.getSize();
+    const pngBuffer = image.toPNG();
     const captureDir = getCaptureDir();
 
     captureSequence += 1;
-    latestCapturePath = path.join(captureDir, "latest-platform-capture.png");
-    fs.writeFileSync(latestCapturePath, image.toPNG());
+    latestCapturePath = path.join(captureDir, "latest-chart-capture.png");
+    fs.writeFileSync(latestCapturePath, pngBuffer);
 
+    const capturedAt = new Date().toISOString();
     const state = getCaptureState();
+
+    const analyzerSent = analyzer.sendFrame({
+      sequence: captureSequence,
+      platform: getPlatformHost(),
+      asset: "unknown",
+      timeframe: "1m",
+      capturedAt,
+      phase: state.phase,
+      imageBase64: pngBuffer.toString("base64")
+    });
 
     sendDashboard("capture:frame", {
       ok: true,
       sequence: captureSequence,
-      capturedAt: new Date().toISOString(),
+      capturedAt,
       imageSize,
       phase: state.phase,
       candleSecond: state.candleSecond,
       candleRemaining: state.candleRemaining,
       intervalMs: lastCaptureIntervalMs,
       savedPath: latestCapturePath,
+      captureRect,
+      analyzerSent,
       previewDataUrl: image.resize({ width: 360 }).toDataURL()
     });
   } catch (error) {
@@ -324,8 +410,13 @@ function startCaptureLoop() {
   captureSequence = 0;
   latestCapturePath = null;
 
+  analyzer.start();
   void captureOnce();
-  return getCaptureState();
+
+  return {
+    ...getCaptureState(),
+    analyzer: analyzer.getStatus()
+  };
 }
 
 function stopCaptureLoop() {
@@ -337,12 +428,20 @@ function stopCaptureLoop() {
   }
 
   captureStartedAt = null;
+  analyzer.stop();
+
   sendDashboard("capture:state", getCaptureState());
-  return getCaptureState();
+  sendDashboard("analyzer:status", analyzer.getStatus());
+
+  return {
+    ...getCaptureState(),
+    analyzer: analyzer.getStatus()
+  };
 }
 
 ipcMain.handle("browser:navigate", async (_event, url: string) => {
   const loadedUrl = loadPlatformUrl(url);
+
   return {
     ...getCaptureState(),
     url: loadedUrl
@@ -376,6 +475,10 @@ ipcMain.handle("capture:start", async () => startCaptureLoop());
 ipcMain.handle("capture:stop", async () => stopCaptureLoop());
 ipcMain.handle("capture:get-state", async () => getCaptureState());
 
+ipcMain.handle("analyzer:connect", async () => analyzer.start());
+ipcMain.handle("analyzer:disconnect", async () => analyzer.stop());
+ipcMain.handle("analyzer:get-status", async () => analyzer.getStatus());
+
 app.whenReady().then(() => {
   createMainWindow();
   attachPlatformEvents();
@@ -393,3 +496,6 @@ app.on("window-all-closed", () => {
     app.quit();
   }
 });
+
+
+
