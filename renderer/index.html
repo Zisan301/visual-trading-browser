@@ -185,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M2.6 - Prediction lock window connected to analyzer timing state machine.</p>
+        <p class="muted">M2.7 - Strategy scoring placeholder connected to prediction lock window.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -244,6 +244,15 @@
         <strong id="lockedConfidence">--</strong>
       </div>
 
+      <div class="metric">
+        <span>Strategy score</span>
+        <strong id="lockedStrategyScore">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Strategy reason</span>
+        <strong id="lockedStrategyReason">--</strong>
+      </div>
       <pre id="predictionLockDetails">No locked prediction yet.</pre>
     </div>
     <!-- M2.6 Prediction Lock Card END -->
@@ -632,8 +641,76 @@
 </script>
 <!-- M2.6 Prediction Lock Script END -->
 
+
+<!-- M2.7 Strategy Score Script START -->
+<script>
+(function() {
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function percent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n * 100)) + "%";
+  }
+
+  window.updatePredictionLock = function(result) {
+    const timing = result && result.analyzer_timing ? result.analyzer_timing : {};
+    const market = result && result.market ? result.market : {};
+    const lock = market.prediction_lock || {};
+    const locked = lock.locked_prediction || null;
+    const strategy = locked && locked.strategy_score ? locked.strategy_score : null;
+
+    setText("predictionLockStatus", lock.status || timing.state || timing.phase || "WAITING");
+
+    setText(
+      "lockedDecision",
+      locked && locked.decision ? locked.decision : "--"
+    );
+
+    setText(
+      "lockedCandleId",
+      locked && locked.candle_id ? locked.candle_id : "--"
+    );
+
+    setText(
+      "lockedConfidence",
+      locked && locked.confidence !== undefined ? percent(locked.confidence) : "--"
+    );
+
+    setText(
+      "lockedStrategyScore",
+      strategy && strategy.overall_score !== undefined ? percent(strategy.overall_score) : "--"
+    );
+
+    setText(
+      "lockedStrategyReason",
+      strategy && strategy.reason ? strategy.reason : "--"
+    );
+
+    const details = document.getElementById("predictionLockDetails");
+    if (details) {
+      details.textContent = JSON.stringify({
+        analyzer_timing: timing,
+        prediction_lock: lock
+      }, null, 2);
+    }
+  };
+
+  if (window.vtb && typeof window.vtb.onAnalyzerResult === "function") {
+    window.vtb.onAnalyzerResult(function(result) {
+      window.updatePredictionLock(result);
+    });
+  }
+})();
+</script>
+<!-- M2.7 Strategy Score Script END -->
+
 </body>
 </html>
+
 
 
 

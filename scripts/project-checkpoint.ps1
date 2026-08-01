@@ -38,7 +38,7 @@ try {
 }
 
 $timingFile = Exists "analyzer/app/prediction/timing_state_machine.py"
-$mainM25 = HasText "analyzer/app/main.py" "M2_5_TIMING_STATE_MACHINE"
+$mainM25 = HasText "analyzer/app/main.py" "M2_7_STRATEGY_SCORING_PLACEHOLDER"
 $mainTiming = HasText "analyzer/app/main.py" "TimingStateMachine"
 $timingInstance = HasText "analyzer/app/main.py" "_timing_machine = TimingStateMachine()"
 $schemaSecond = HasText "analyzer/app/schemas.py" "candle_second"
@@ -50,18 +50,23 @@ $rendererTiming = HasText "renderer/index.html" "analyzer_timing"
 $predictionLockFile = Exists "analyzer/app/prediction/prediction_lock.py"
 $mainPredictionLock = HasText "analyzer/app/main.py" "PredictionLockManager"
 $rendererPredictionLock = HasText "renderer/index.html" "predictionLockStatus"
+$strategyScoringFile = Exists "analyzer/app/prediction/strategy_scoring.py"
+$predictionLockStrategy = HasText "analyzer/app/prediction/prediction_lock.py" "StrategyScoringEngine"
+$rendererStrategyScore = HasText "renderer/index.html" "lockedStrategyScore"
 
 $next = @()
 
 if ($status.Trim().Length -gt 0) { $next += "Uncommitted changes exist. Test, then commit/push." }
 if ($timingFile -ne "YES") { $next += "Create analyzer/app/prediction/timing_state_machine.py." }
-if ($mainM25 -ne "YES" -or $mainTiming -ne "YES" -or $timingInstance -ne "YES") { $next += "Fix M2.5 backend wiring in analyzer/app/main.py." }
+if ($mainM25 -ne "YES" -or $mainTiming -ne "YES" -or $timingInstance -ne "YES") { $next += "Fix M2.7 backend wiring in analyzer/app/main.py." }
 if ($schemaSecond -ne "YES" -or $schemaRemain -ne "YES" -or $schemaAnalyzerTiming -ne "YES") { $next += "Fix analyzer/app/schemas.py metadata/analyzer_timing fields." }
 if ($electronSecond -ne "YES" -or $clientSecond -ne "YES") { $next += "Fix Electron timing metadata passthrough." }
 if ($rendererTiming -ne "YES") { $next += "Fix dashboard analyzer_timing display." }
 if ($predictionLockFile -ne "YES" -or $mainPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock backend wiring." }
 if ($rendererPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock dashboard display." }
-if ($health -notmatch "M2_6_PREDICTION_LOCK_WINDOW") { $next += "Restart analyzer or finish health phase M2.6 wiring." }
+if ($strategyScoringFile -ne "YES" -or $predictionLockStrategy -ne "YES") { $next += "Fix M2.7 strategy scoring backend wiring." }
+if ($rendererStrategyScore -ne "YES") { $next += "Fix M2.7 strategy score dashboard display." }
+if ($health -notmatch "M2_7_STRATEGY_SCORING_PLACEHOLDER") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
 
 if ($next.Count -eq 0) {
     $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
@@ -89,7 +94,7 @@ $health
 
 M2.5 checks:
 timing_state_machine.py: $timingFile
-main.py M2.5 phase: $mainM25
+main.py M2.7 phase: $mainM25
 main.py TimingStateMachine: $mainTiming
 main.py _timing_machine: $timingInstance
 schemas.py candle_second: $schemaSecond
@@ -103,6 +108,11 @@ M2.6 checks:
 prediction_lock.py: $predictionLockFile
 main.py PredictionLockManager: $mainPredictionLock
 renderer/index.html predictionLockStatus: $rendererPredictionLock
+
+M2.7 checks:
+strategy_scoring.py: $strategyScoringFile
+prediction_lock.py StrategyScoringEngine: $predictionLockStrategy
+renderer/index.html lockedStrategyScore: $rendererStrategyScore
 
 NEXT CONTINUATION TASK:
 $nextText
@@ -120,4 +130,6 @@ Continue from docs/CHATGPT_PROJECT_STATE.md
 
 $report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
 Write-Host $report
+
+
 

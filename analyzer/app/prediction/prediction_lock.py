@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Any
 
+from analyzer.app.prediction.strategy_scoring import StrategyScoringEngine
+
 
 @dataclass
 class PredictionLockMemory:
@@ -15,6 +17,7 @@ class PredictionLockManager:
 
     def __init__(self) -> None:
         self.memory = PredictionLockMemory()
+        self.strategy = StrategyScoringEngine()
 
     def update(
         self,
@@ -56,6 +59,7 @@ class PredictionLockManager:
 
         return {
             "machine": self.machine,
+            "strategy_machine": self.strategy.machine,
             "status": status,
             "active_candle_id": active_candle_id,
             "lock_window_open": lock_window_open,
@@ -64,7 +68,7 @@ class PredictionLockManager:
             "signal": signal,
             "prediction_only": True,
             "auto_trade": False,
-            "note": "Prediction-only visual lock. No automatic trade action.",
+            "note": "Prediction-only visual lock with M2.7 strategy scoring placeholder. No automatic trade action.",
         }
 
     def _build_locked_prediction(
@@ -74,24 +78,7 @@ class PredictionLockManager:
         current_candle: dict[str, Any] | None,
         active_candle_id: str | None,
     ) -> dict[str, Any]:
-        current_candle = current_candle or {}
-
-        direction = str(current_candle.get("direction", "UNKNOWN")).upper()
-        raw_confidence = current_candle.get("detection_confidence", 0.0)
-
-        try:
-            detector_confidence = float(raw_confidence)
-        except Exception:
-            detector_confidence = 0.0
-
-        if direction == "GREEN":
-            decision = "CALL_WATCH"
-        elif direction == "RED":
-            decision = "PUT_WATCH"
-        else:
-            decision = "NO_SIGNAL"
-
-        confidence = round(max(0.0, min(1.0, detector_confidence * 0.60)), 4)
+        strategy_score = self.strategy.score(current_candle)
 
         return {
             "prediction_id": f"PRED_{active_candle_id or 'UNKNOWN'}_{int(sequence)}",
@@ -99,12 +86,13 @@ class PredictionLockManager:
             "locked_at_sequence": int(sequence),
             "locked_at_second": timing.get("candle_second"),
             "locked_cycle_number": timing.get("locked_cycle_number"),
-            "decision": decision,
-            "direction_basis": direction,
-            "confidence": confidence,
+            "decision": strategy_score["decision"],
+            "direction_basis": strategy_score["direction_basis"],
+            "confidence": strategy_score["confidence"],
+            "strategy_score": strategy_score,
             "is_locked": True,
             "prediction_only": True,
             "auto_trade": False,
             "source": self.machine,
-            "rationale": "Locked once during 55-59s window using current visual candle direction placeholder.",
+            "rationale": strategy_score["reason"],
         }
