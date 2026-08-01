@@ -38,7 +38,7 @@ try {
 }
 
 $timingFile = Exists "analyzer/app/prediction/timing_state_machine.py"
-$mainM25 = HasText "analyzer/app/main.py" "M2_7_STRATEGY_SCORING_PLACEHOLDER"
+$mainM25 = HasText "analyzer/app/main.py" "M2_8_SIGNAL_HISTORY_TRACKER"
 $mainTiming = HasText "analyzer/app/main.py" "TimingStateMachine"
 $timingInstance = HasText "analyzer/app/main.py" "_timing_machine = TimingStateMachine()"
 $schemaSecond = HasText "analyzer/app/schemas.py" "candle_second"
@@ -53,6 +53,9 @@ $rendererPredictionLock = HasText "renderer/index.html" "predictionLockStatus"
 $strategyScoringFile = Exists "analyzer/app/prediction/strategy_scoring.py"
 $predictionLockStrategy = HasText "analyzer/app/prediction/prediction_lock.py" "StrategyScoringEngine"
 $rendererStrategyScore = HasText "renderer/index.html" "lockedStrategyScore"
+$signalHistoryFile = Exists "analyzer/app/prediction/signal_history.py"
+$mainSignalHistory = HasText "analyzer/app/main.py" "SignalHistoryTracker"
+$rendererSignalHistory = HasText "renderer/index.html" "signalHistoryCard"
 
 $next = @()
 
@@ -66,7 +69,9 @@ if ($predictionLockFile -ne "YES" -or $mainPredictionLock -ne "YES") { $next += 
 if ($rendererPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock dashboard display." }
 if ($strategyScoringFile -ne "YES" -or $predictionLockStrategy -ne "YES") { $next += "Fix M2.7 strategy scoring backend wiring." }
 if ($rendererStrategyScore -ne "YES") { $next += "Fix M2.7 strategy score dashboard display." }
-if ($health -notmatch "M2_7_STRATEGY_SCORING_PLACEHOLDER") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
+if ($signalHistoryFile -ne "YES" -or $mainSignalHistory -ne "YES") { $next += "Fix M2.8 signal history backend wiring." }
+if ($rendererSignalHistory -ne "YES") { $next += "Fix M2.8 signal history dashboard display." }
+if ($health -notmatch "M2_8_SIGNAL_HISTORY_TRACKER") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
 
 if ($next.Count -eq 0) {
     $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
@@ -114,6 +119,11 @@ strategy_scoring.py: $strategyScoringFile
 prediction_lock.py StrategyScoringEngine: $predictionLockStrategy
 renderer/index.html lockedStrategyScore: $rendererStrategyScore
 
+M2.8 checks:
+signal_history.py: $signalHistoryFile
+main.py SignalHistoryTracker: $mainSignalHistory
+renderer/index.html signalHistoryCard: $rendererSignalHistory
+
 NEXT CONTINUATION TASK:
 $nextText
 
@@ -130,6 +140,7 @@ Continue from docs/CHATGPT_PROJECT_STATE.md
 
 $report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
 Write-Host $report
+
 
 
 

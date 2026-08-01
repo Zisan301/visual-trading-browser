@@ -11,14 +11,15 @@ from analyzer.app.capture.frame_receiver import FrameDecodeError, decode_base64_
 from analyzer.app.capture.frame_validator import FrameValidationError, validate_frame
 from analyzer.app.prediction.timing_state_machine import TimingStateMachine
 from analyzer.app.prediction.prediction_lock import PredictionLockManager
+from analyzer.app.prediction.signal_history import SignalHistoryTracker
 from analyzer.app.schemas import AnalysisResponse, FrameMetadata
 from analyzer.app.tracking.candle_tracker import LiveCandleTracker
 from analyzer.app.vision.candle_detector import VisualCandleDetector
 
 app = FastAPI(
     title="Visual Trading Browser Analyzer",
-    version="0.2.7",
-    description="M2.7 FastAPI + OpenCV visual candle detector with strategy scoring placeholder. Prediction-only. No trading actions.",
+    version="0.2.8",
+    description="M2.8 FastAPI + OpenCV visual candle detector with signal history tracker. Prediction-only. No trading actions.",
 )
 
 app.add_middleware(
@@ -33,6 +34,7 @@ _detector = VisualCandleDetector()
 _tracker = LiveCandleTracker()
 _timing_machine = TimingStateMachine()
 _prediction_lock = PredictionLockManager()
+_signal_history = SignalHistoryTracker()
 
 
 @app.get("/health")
@@ -40,7 +42,7 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "service": "visual-trading-browser-analyzer",
-        "phase": "M2_7_STRATEGY_SCORING_PLACEHOLDER",
+        "phase": "M2_8_SIGNAL_HISTORY_TRACKER",
         "prediction_only": True,
         "auto_trade": False,
     }
@@ -126,12 +128,18 @@ def _analyze_and_track(image: Any, metadata: FrameMetadata | None = None, sequen
         tracking=tracked.tracking,
     )
 
+    signal_history = _signal_history.update(
+        sequence=tracked.sequence,
+        prediction_lock=prediction_lock,
+    )
+
     signals = list(tracked.signals or [])
     if prediction_lock.get("signal"):
         signals.append(prediction_lock["signal"])
 
     market = dict(tracked.market or {})
     market["prediction_lock"] = prediction_lock
+    market["signal_history"] = signal_history
 
     return tracked.model_copy(
         update={
@@ -170,6 +178,7 @@ def _decode_websocket_message(message: dict[str, Any], fallback_sequence: int) -
         return decode_base64_image(image_base64), metadata
 
     raise ValueError("Unsupported WebSocket message. Send PNG/JPEG bytes or JSON with image_base64.")
+
 
 
 
