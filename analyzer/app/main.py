@@ -18,8 +18,8 @@ from analyzer.app.vision.candle_detector import VisualCandleDetector
 
 app = FastAPI(
     title="Visual Trading Browser Analyzer",
-    version="0.2.8",
-    description="M2.8 FastAPI + OpenCV visual candle detector with signal history tracker. Prediction-only. No trading actions.",
+    version="0.2.9",
+    description="M2.9 FastAPI + OpenCV visual candle detector with candle outcome resolver. Prediction-only. No trading actions.",
 )
 
 app.add_middleware(
@@ -42,7 +42,7 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "service": "visual-trading-browser-analyzer",
-        "phase": "M2_8_SIGNAL_HISTORY_TRACKER",
+        "phase": "M2_9_CANDLE_OUTCOME_RESOLVER",
         "prediction_only": True,
         "auto_trade": False,
     }
@@ -131,6 +131,8 @@ def _analyze_and_track(image: Any, metadata: FrameMetadata | None = None, sequen
     signal_history = _signal_history.update(
         sequence=tracked.sequence,
         prediction_lock=prediction_lock,
+        tracking=tracked.tracking,
+        current_candle=current_candle_payload,
     )
 
     signals = list(tracked.signals or [])
@@ -178,6 +180,7 @@ def _decode_websocket_message(message: dict[str, Any], fallback_sequence: int) -
         return decode_base64_image(image_base64), metadata
 
     raise ValueError("Unsupported WebSocket message. Send PNG/JPEG bytes or JSON with image_base64.")
+
 
 
 

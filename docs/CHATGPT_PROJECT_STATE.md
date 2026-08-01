@@ -1,22 +1,26 @@
 ﻿=== Visual Trading Browser Checkpoint ===
 
 Last updated:
-2026-08-01 22:37:14 +06:00
+2026-08-01 23:19:16 +06:00
 
 Current branch:
-m2.8-signal-history-tracker
+m2.9-candle-outcome-resolver
 
 Git status:
  M analyzer/app/main.py
+ M analyzer/app/prediction/signal_history.py
  M renderer/index.html
  M scripts/project-checkpoint.ps1
-?? analyzer/app/main.py.bak.m28.20260801_223330
-?? analyzer/app/prediction/signal_history.py
-?? renderer/index.html.bak.m28.20260801_223330
-?? scripts/project-checkpoint.ps1.bak.m28.20260801_223330
+?? analyzer/app/main.py.bak.m29.20260801_223939
+?? analyzer/app/prediction/candle_outcome_resolver.py
+?? analyzer/app/prediction/signal_history.py.bak.m29.20260801_223939
+?? renderer/index.html.bak.m29.20260801_223939
+?? scripts/project-checkpoint.ps1.bak.m29.20260801_223939
 
 Recent commits:
-df5e455 (HEAD -> m2.8-signal-history-tracker, origin/main, origin/m2.8-signal-history-tracker, origin/HEAD, main) Merge M2.7 strategy scoring placeholder
+a28285f (HEAD -> m2.9-candle-outcome-resolver, origin/main, origin/m2.9-candle-outcome-resolver, origin/HEAD, main) Merge M2.8 signal history tracker
+07f55db (origin/m2.8-signal-history-tracker, m2.8-signal-history-tracker) Add M2.8 signal history tracker
+df5e455 Merge M2.7 strategy scoring placeholder
 e407a25 (origin/m2.7-strategy-scoring-placeholder, m2.7-strategy-scoring-placeholder) Update checkpoint for M2.7
 d361416 Add M2.7 strategy scoring placeholder
 3892fda Merge M2.6 prediction lock window
@@ -24,8 +28,6 @@ d361416 Add M2.7 strategy scoring placeholder
 3813ec8 Add M2.6 prediction lock window
 5665fe3 Merge M2.5 timing state machine
 ac997da (origin/m2.5-timing-state-machine, m2.5-timing-state-machine) Complete M2.5 timing metadata frontend wiring
-f813b69 Add project checkpoint script
-9b945bc Complete M2.5 timing state machine backend
 
 Analyzer health:
 Analyzer not running. Start with: npm run analyzer:dev
@@ -56,6 +58,11 @@ M2.8 checks:
 signal_history.py: YES
 main.py SignalHistoryTracker: YES
 renderer/index.html signalHistoryCard: YES
+
+M2.9 checks:
+candle_outcome_resolver.py: YES
+signal_history.py CandleOutcomeResolver: YES
+renderer/index.html accuracyPercent: YES
 
 NEXT CONTINUATION TASK:
 - Uncommitted changes exist. Test, then commit/push.
