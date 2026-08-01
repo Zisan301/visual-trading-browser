@@ -1,6 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
+import time
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
@@ -9,14 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from analyzer.app.capture.frame_receiver import FrameDecodeError, decode_base64_image, decode_image_bytes
 from analyzer.app.capture.frame_validator import FrameValidationError, validate_frame
 from analyzer.app.prediction.timing_state_machine import TimingStateMachine
+from analyzer.app.prediction.prediction_lock import PredictionLockManager
 from analyzer.app.schemas import AnalysisResponse, FrameMetadata
 from analyzer.app.tracking.candle_tracker import LiveCandleTracker
 from analyzer.app.vision.candle_detector import VisualCandleDetector
 
 app = FastAPI(
     title="Visual Trading Browser Analyzer",
-    version="0.2.5",
-    description="M2.5 FastAPI + OpenCV visual candle detector with live candle tracker and timing state machine. Prediction-only. No trading actions.",
+    version="0.2.6",
+    description="M2.6 FastAPI + OpenCV visual candle detector with prediction lock window. Prediction-only. No trading actions.",
 )
 
 app.add_middleware(
@@ -30,6 +32,7 @@ app.add_middleware(
 _detector = VisualCandleDetector()
 _tracker = LiveCandleTracker()
 _timing_machine = TimingStateMachine()
+_prediction_lock = PredictionLockManager()
 
 
 @app.get("/health")
@@ -37,7 +40,7 @@ def health() -> dict[str, Any]:
     return {
         "ok": True,
         "service": "visual-trading-browser-analyzer",
-        "phase": "M2_5_TIMING_STATE_MACHINE",
+        "phase": "M2_6_PREDICTION_LOCK_WINDOW",
         "prediction_only": True,
         "auto_trade": False,
     }
@@ -96,17 +99,46 @@ def _analyze_and_track(image: Any, metadata: FrameMetadata | None = None, sequen
     result = _detector.analyze_image(image, sequence=sequence)
     tracked = _tracker.update(result)
 
+    candle_second = metadata.candle_second
+    candle_remaining = metadata.candle_remaining
+
+    # M2.6 hard fallback: if Electron metadata is missing, use server wall-clock second.
+    # This prevents candle_second/candle_remaining from staying null and allows lock-window testing.
+    if candle_second is None:
+        candle_second = int(time.time()) % 60
+
+    if candle_remaining is None:
+        candle_remaining = max(0, 60 - int(candle_second))
+
     analyzer_timing = _timing_machine.update(
         sequence=tracked.sequence,
-        candle_second=metadata.candle_second,
-        candle_remaining=metadata.candle_remaining,
+        candle_second=candle_second,
+        candle_remaining=candle_remaining,
         tracking=tracked.tracking,
     )
+
+    current_candle_payload = tracked.current_candle.model_dump() if tracked.current_candle else None
+
+    prediction_lock = _prediction_lock.update(
+        sequence=tracked.sequence,
+        timing=analyzer_timing,
+        current_candle=current_candle_payload,
+        tracking=tracked.tracking,
+    )
+
+    signals = list(tracked.signals or [])
+    if prediction_lock.get("signal"):
+        signals.append(prediction_lock["signal"])
+
+    market = dict(tracked.market or {})
+    market["prediction_lock"] = prediction_lock
 
     return tracked.model_copy(
         update={
             "timing": analyzer_timing,
             "analyzer_timing": analyzer_timing,
+            "market": market,
+            "signals": signals,
         }
     )
 
@@ -138,3 +170,7 @@ def _decode_websocket_message(message: dict[str, Any], fallback_sequence: int) -
         return decode_base64_image(image_base64), metadata
 
     raise ValueError("Unsupported WebSocket message. Send PNG/JPEG bytes or JSON with image_base64.")
+
+
+
+

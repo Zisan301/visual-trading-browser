@@ -185,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M2.5 - Electron scanner connected to analyzer timing state machine.</p>
+        <p class="muted">M2.6 - Prediction lock window connected to analyzer timing state machine.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -219,7 +219,35 @@
       </div>
     </div>
 
-    <div class="card">
+    
+    <!-- M2.6 Prediction Lock Card START -->
+    <div class="card" id="predictionLockCard">
+      <h2>Prediction lock window</h2>
+
+      <div class="metric">
+        <span>Lock status</span>
+        <strong id="predictionLockStatus">WAITING</strong>
+      </div>
+
+      <div class="metric">
+        <span>Locked decision</span>
+        <strong id="lockedDecision">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Locked candle</span>
+        <strong id="lockedCandleId">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Locked confidence</span>
+        <strong id="lockedConfidence">--</strong>
+      </div>
+
+      <pre id="predictionLockDetails">No locked prediction yet.</pre>
+    </div>
+    <!-- M2.6 Prediction Lock Card END -->
+<div class="card">
       <h2>Analyzer connection</h2>
 
       <div class="metric">
@@ -342,6 +370,11 @@
     const phaseForming = document.getElementById("phaseForming");
     const phaseLock = document.getElementById("phaseLock");
 
+    const predictionLockStatus = document.getElementById("predictionLockStatus");
+    const lockedDecision = document.getElementById("lockedDecision");
+    const lockedCandleId = document.getElementById("lockedCandleId");
+    const lockedConfidence = document.getElementById("lockedConfidence");
+    const predictionLockDetails = document.getElementById("predictionLockDetails");
     const frameStatus = document.getElementById("frameStatus");
     const preview = document.getElementById("preview");
     const frameInfo = document.getElementById("frameInfo");
@@ -372,6 +405,29 @@
       stopScannerBtn.disabled = !running;
     }
 
+    function updatePredictionLock(result) {
+      const timing = result && result.analyzer_timing ? result.analyzer_timing : {};
+      const market = result && result.market ? result.market : {};
+      const lock = market.prediction_lock || {};
+      const locked = lock.locked_prediction || null;
+
+      if (!predictionLockStatus || !lockedDecision || !lockedCandleId || !lockedConfidence || !predictionLockDetails) {
+        return;
+      }
+
+      predictionLockStatus.textContent = lock.status || timing.state || "--";
+      lockedDecision.textContent = locked && locked.decision ? locked.decision : "--";
+      lockedCandleId.textContent = locked && locked.candle_id ? locked.candle_id : "--";
+
+      lockedConfidence.textContent = locked && locked.confidence !== undefined
+        ? String(Math.round(Number(locked.confidence) * 100)) + "%"
+        : "--";
+
+      predictionLockDetails.textContent = JSON.stringify({
+        analyzer_timing: timing,
+        prediction_lock: lock
+      }, null, 2);
+    }
     function updateAnalyzerStatus(status) {
       analyzerUrl.textContent = status && status.url ? status.url : "--";
       analyzerSequence.textContent = status && status.lastSequence !== null && status.lastSequence !== undefined
@@ -507,7 +563,10 @@
     });
 
     window.vtb.onAnalyzerStatus(updateAnalyzerStatus);
-    window.vtb.onAnalyzerResult(updateAnalyzerResult);
+    window.vtb.onAnalyzerResult(function(result) {
+      updateAnalyzerResult(result);
+      updatePredictionLock(result);
+    });
 
     window.vtb.getCaptureState().then(function(state) {
       setScannerRunning(Boolean(state.running));
@@ -517,54 +576,67 @@
     window.vtb.getAnalyzerStatus().then(updateAnalyzerStatus);
   </script>
 
-<!-- M2.5 Timing Dashboard Panel -->
-<div id="m25TimingPanel" style="margin-top: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;">
-  <div style="font-weight: 600; margin-bottom: 8px;">M2.5 Analyzer Timing</div>
 
-  <div style="display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 8px;">
-    <div>
-      <div style="font-size: 12px; opacity: 0.7;">Timing Phase</div>
-      <div id="analyzerTimingPhase">--</div>
-    </div>
-
-    <div>
-      <div style="font-size: 12px; opacity: 0.7;">Candle Second</div>
-      <div id="candleSecond">--</div>
-    </div>
-
-    <div>
-      <div style="font-size: 12px; opacity: 0.7;">Candle Remaining</div>
-      <div id="candleRemaining">--</div>
-    </div>
-  </div>
-</div>
-
+<!-- M2.6 Prediction Lock Script START -->
 <script>
-  window.updateM25AnalyzerTiming = function(result) {
-    if (!result) return;
+(function() {
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
 
-    const timing = result.analyzer_timing || {};
+  function percent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n * 100)) + "%";
+  }
 
-    const phaseEl = document.getElementById("analyzerTimingPhase");
-    const secondEl = document.getElementById("candleSecond");
-    const remainingEl = document.getElementById("candleRemaining");
+  window.updatePredictionLock = function(result) {
+    const timing = result && result.analyzer_timing ? result.analyzer_timing : {};
+    const market = result && result.market ? result.market : {};
+    const lock = market.prediction_lock || {};
+    const locked = lock.locked_prediction || null;
 
-    if (phaseEl) {
-      phaseEl.textContent = timing.phase ?? result.phase ?? "--";
-    }
+    setText("predictionLockStatus", lock.status || timing.state || timing.phase || "WAITING");
 
-    if (secondEl) {
-      secondEl.textContent = result.candle_second ?? timing.candle_second ?? "--";
-    }
+    setText(
+      "lockedDecision",
+      locked && locked.decision ? locked.decision : "--"
+    );
 
-    if (remainingEl) {
-      remainingEl.textContent = result.candle_remaining ?? timing.candle_remaining ?? "--";
+    setText(
+      "lockedCandleId",
+      locked && locked.candle_id ? locked.candle_id : "--"
+    );
+
+    setText(
+      "lockedConfidence",
+      locked && locked.confidence !== undefined ? percent(locked.confidence) : "--"
+    );
+
+    const details = document.getElementById("predictionLockDetails");
+    if (details) {
+      details.textContent = JSON.stringify({
+        analyzer_timing: timing,
+        prediction_lock: lock
+      }, null, 2);
     }
   };
+
+  if (window.vtb && typeof window.vtb.onAnalyzerResult === "function") {
+    window.vtb.onAnalyzerResult(function(result) {
+      window.updatePredictionLock(result);
+    });
+  }
+})();
 </script>
+<!-- M2.6 Prediction Lock Script END -->
 
 </body>
 </html>
+
+
+
 
 
 
