@@ -1,97 +1,109 @@
-﻿$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "SilentlyContinue"
 
-Set-Location "E:\VS Code\visual-trading-browser"
-
-function Run-Cmd {
-    param([string]$Command)
-    try {
-        $out = cmd /c $Command 2>&1
-        return ($out -join "`n")
-    } catch {
-        return "ERROR: $Command`n$($_.Exception.Message)"
-    }
-}
-
-function HasText {
-    param([string]$Path, [string]$Needle)
-    if (!(Test-Path $Path)) { return "MISSING_FILE" }
-    $txt = Get-Content $Path -Raw
-    if ($txt.Contains($Needle)) { return "YES" }
+function YesNo($condition) {
+    if ($condition) { return "YES" }
     return "NO"
 }
 
-function Exists {
-    param([string]$Path)
-    if (Test-Path $Path) { return "YES" }
-    return "NO"
+function Exists($path) {
+    return YesNo(Test-Path $path)
+}
+
+function HasText($path, $text) {
+    if (!(Test-Path $path)) { return "NO" }
+    $raw = Get-Content $path -Raw
+    return YesNo($raw -like "*$text*")
 }
 
 $now = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
-$branch = Run-Cmd "git branch --show-current"
-$status = Run-Cmd "git status --short"
-$commits = Run-Cmd "git log --oneline --decorate -10"
+$branch = git branch --show-current
+$status = git status --short
+$commits = git log --oneline --decorate -10
 
+$health = ""
 try {
-    $health = (Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -TimeoutSec 3 | ConvertTo-Json -Depth 10)
+    $healthObj = Invoke-RestMethod "http://127.0.0.1:8000/health" -TimeoutSec 2
+    $health = ($healthObj | ConvertTo-Json -Compress)
 } catch {
     $health = "Analyzer not running. Start with: npm run analyzer:dev"
 }
 
-$timingFile = Exists "analyzer/app/prediction/timing_state_machine.py"
-$mainM25 = HasText "analyzer/app/main.py" "M3_1_SIGNAL_TABLE_UI"
-$mainTiming = HasText "analyzer/app/main.py" "TimingStateMachine"
-$timingInstance = HasText "analyzer/app/main.py" "_timing_machine = TimingStateMachine()"
-$schemaSecond = HasText "analyzer/app/schemas.py" "candle_second"
-$schemaRemain = HasText "analyzer/app/schemas.py" "candle_remaining"
-$schemaAnalyzerTiming = HasText "analyzer/app/schemas.py" "analyzer_timing"
-$electronSecond = HasText "electron/main.ts" "candleSecond"
-$clientSecond = HasText "electron/analyzer-client.ts" "candle_second"
-$rendererTiming = HasText "renderer/index.html" "analyzer_timing"
-$predictionLockFile = Exists "analyzer/app/prediction/prediction_lock.py"
-$mainPredictionLock = HasText "analyzer/app/main.py" "PredictionLockManager"
-$rendererPredictionLock = HasText "renderer/index.html" "predictionLockStatus"
-$strategyScoringFile = Exists "analyzer/app/prediction/strategy_scoring.py"
-$predictionLockStrategy = HasText "analyzer/app/prediction/prediction_lock.py" "StrategyScoringEngine"
-$rendererStrategyScore = HasText "renderer/index.html" "lockedStrategyScore"
-$signalHistoryFile = Exists "analyzer/app/prediction/signal_history.py"
-$mainSignalHistory = HasText "analyzer/app/main.py" "SignalHistoryTracker"
-$rendererSignalHistory = HasText "renderer/index.html" "signalHistoryCard"
-$outcomeResolverFile = Exists "analyzer/app/prediction/candle_outcome_resolver.py"
-$signalHistoryResolver = HasText "analyzer/app/prediction/signal_history.py" "CandleOutcomeResolver"
-$rendererOutcomeAccuracy = HasText "renderer/index.html" "accuracyPercent"
-$mainM30 = HasText "analyzer/app/main.py" "M3_1_SIGNAL_TABLE_UI"
-$historyM30 = HasText "analyzer/app/prediction/signal_history.py" "M3_1_SIGNAL_TABLE_UI"
-$rendererM30 = HasText "renderer/index.html" "stableSignalPanelCard"
-$mainM31 = HasText "analyzer/app/main.py" "M3_1_SIGNAL_TABLE_UI"
-$rendererM31 = HasText "renderer/index.html" "signalTableCard"
+$checks = [ordered]@{}
 
-$next = @()
+$checks["docs/CHATGPT_PROJECT_STATE.md"] = Exists "docs/CHATGPT_PROJECT_STATE.md"
+$checks["docs/STRATEGY_LAYER_MEMORY.md"] = Exists "docs/STRATEGY_LAYER_MEMORY.md"
 
-if ($status.Trim().Length -gt 0) { $next += "Uncommitted changes exist. Test, then commit/push." }
-if ($timingFile -ne "YES") { $next += "Create analyzer/app/prediction/timing_state_machine.py." }
-if ($mainM25 -ne "YES" -or $mainTiming -ne "YES" -or $timingInstance -ne "YES") { $next += "Fix M2.7 backend wiring in analyzer/app/main.py." }
-if ($schemaSecond -ne "YES" -or $schemaRemain -ne "YES" -or $schemaAnalyzerTiming -ne "YES") { $next += "Fix analyzer/app/schemas.py metadata/analyzer_timing fields." }
-if ($electronSecond -ne "YES" -or $clientSecond -ne "YES") { $next += "Fix Electron timing metadata passthrough." }
-if ($rendererTiming -ne "YES") { $next += "Fix dashboard analyzer_timing display." }
-if ($predictionLockFile -ne "YES" -or $mainPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock backend wiring." }
-if ($rendererPredictionLock -ne "YES") { $next += "Fix M2.6 prediction lock dashboard display." }
-if ($strategyScoringFile -ne "YES" -or $predictionLockStrategy -ne "YES") { $next += "Fix M2.7 strategy scoring backend wiring." }
-if ($rendererStrategyScore -ne "YES") { $next += "Fix M2.7 strategy score dashboard display." }
-if ($signalHistoryFile -ne "YES" -or $mainSignalHistory -ne "YES") { $next += "Fix M2.8 signal history backend wiring." }
-if ($rendererSignalHistory -ne "YES") { $next += "Fix M2.8 signal history dashboard display." }
-if ($outcomeResolverFile -ne "YES" -or $signalHistoryResolver -ne "YES") { $next += "Fix M2.9 candle outcome resolver backend wiring." }
-if ($rendererOutcomeAccuracy -ne "YES") { $next += "Fix M2.9 accuracy dashboard display." }
-if ($mainM30 -ne "YES" -or $historyM30 -ne "YES") { $next += "Fix M3.0 stable signal backend summary." }
-if ($rendererM30 -ne "YES") { $next += "Fix M3.0 stable signal dashboard panel." }
-if ($mainM31 -ne "YES") { $next += "Fix M3.1 analyzer phase wiring." }
-if ($rendererM31 -ne "YES") { $next += "Fix M3.1 signal table dashboard panel." }
-if ($health -notmatch "M3_1_SIGNAL_TABLE_UI") { $next += "Restart analyzer or finish health phase M2.7 wiring." }
+$checks["timing_state_machine.py"] = Exists "analyzer/app/prediction/timing_state_machine.py"
+$checks["main.py TimingStateMachine"] = HasText "analyzer/app/main.py" "TimingStateMachine"
+$checks["main.py PredictionLockManager"] = HasText "analyzer/app/main.py" "PredictionLockManager"
+$checks["prediction_lock.py"] = Exists "analyzer/app/prediction/prediction_lock.py"
 
-if ($next.Count -eq 0) {
-    $next += "M2.6 looks structurally complete. Live-test one locked prediction per candle, then continue M2.7 strategy scoring placeholder."
+$checks["strategy_scoring.py"] = Exists "analyzer/app/prediction/strategy_scoring.py"
+$checks["prediction_lock.py StrategyScoringEngine"] = HasText "analyzer/app/prediction/prediction_lock.py" "StrategyScoringEngine"
+
+$checks["signal_history.py"] = Exists "analyzer/app/prediction/signal_history.py"
+$checks["signal_history.py panel summary"] = HasText "analyzer/app/prediction/signal_history.py" "M3_0_STABLE_SIGNAL_PANEL"
+
+$checks["candle_outcome_resolver.py"] = Exists "analyzer/app/prediction/candle_outcome_resolver.py"
+$checks["signal_history.py CandleOutcomeResolver"] = HasText "analyzer/app/prediction/signal_history.py" "CandleOutcomeResolver"
+
+$checks["renderer predictionLockStatus"] = HasText "renderer/index.html" "predictionLockStatus"
+$checks["renderer signalHistoryCard"] = HasText "renderer/index.html" "signalHistoryCard"
+$checks["renderer stableSignalPanelCard"] = HasText "renderer/index.html" "stableSignalPanelCard"
+$checks["renderer signalTableCard"] = HasText "renderer/index.html" "signalTableCard"
+
+$checks["electron/main.ts candleSecond"] = HasText "electron/main.ts" "candleSecond"
+$checks["electron/analyzer-client.ts candle_second"] = HasText "electron/analyzer-client.ts" "candle_second"
+
+$phase = "UNKNOWN"
+if (Test-Path "analyzer/app/main.py") {
+    $mainRaw = Get-Content "analyzer/app/main.py" -Raw
+    if ($mainRaw -like "*M3_1_SIGNAL_TABLE_UI*") { $phase = "M3.1_SIGNAL_TABLE_UI" }
+    elseif ($mainRaw -like "*M3_0_STABLE_SIGNAL_PANEL*") { $phase = "M3.0_STABLE_SIGNAL_PANEL" }
+    elseif ($mainRaw -like "*M2_9_CANDLE_OUTCOME_RESOLVER*") { $phase = "M2.9_CANDLE_OUTCOME_RESOLVER" }
+    elseif ($mainRaw -like "*M2_8_SIGNAL_HISTORY_TRACKER*") { $phase = "M2.8_SIGNAL_HISTORY_TRACKER" }
+    elseif ($mainRaw -like "*M2_7_STRATEGY_SCORING_PLACEHOLDER*") { $phase = "M2.7_STRATEGY_SCORING_PLACEHOLDER" }
+    elseif ($mainRaw -like "*M2_6_PREDICTION_LOCK_WINDOW*") { $phase = "M2.6_PREDICTION_LOCK_WINDOW" }
+    elseif ($mainRaw -like "*M2_5_TIMING_STATE_MACHINE*") { $phase = "M2.5_TIMING_STATE_MACHINE" }
 }
 
-$nextText = ($next | ForEach-Object { "- $_" }) -join "`n"
+$next = New-Object System.Collections.Generic.List[string]
+
+if ($status) {
+    $next.Add("Uncommitted changes exist. Test, then commit/push.")
+}
+
+if ($checks["renderer signalTableCard"] -eq "YES" -and $phase -eq "M3.1_SIGNAL_TABLE_UI") {
+    $next.Add("Continue with M3.2 Signal Export and Session Summary.")
+} elseif ($checks["renderer stableSignalPanelCard"] -eq "YES") {
+    $next.Add("Continue with M3.1 Signal Table UI or finish/merge it.")
+} elseif ($checks["signal_history.py panel summary"] -eq "YES") {
+    $next.Add("Continue with M3.0 Stable Signal Panel or finish it.")
+} elseif ($checks["candle_outcome_resolver.py"] -eq "YES") {
+    $next.Add("Continue with M2.9 Candle Outcome Resolver or finish it.")
+} elseif ($checks["signal_history.py"] -eq "YES") {
+    $next.Add("Continue with M2.8 Signal History Tracker or finish it.")
+} elseif ($checks["strategy_scoring.py"] -eq "YES") {
+    $next.Add("Continue with M2.7 Strategy Scoring Placeholder or finish it.")
+} elseif ($checks["prediction_lock.py"] -eq "YES") {
+    $next.Add("Continue with M2.6 Prediction Lock Window or finish it.")
+} else {
+    $next.Add("Continue from latest implemented milestone in docs/CHATGPT_PROJECT_STATE.md.")
+}
+
+if ($health -like "*Analyzer not running*") {
+    $next.Add("Analyzer not running. For live test run: npm run analyzer:dev")
+}
+
+$checkText = ""
+foreach ($item in $checks.GetEnumerator()) {
+    $checkText += "$($item.Key): $($item.Value)`n"
+}
+
+$nextText = ""
+foreach ($item in $next) {
+    $nextText += "- $item`n"
+}
 
 $report = @"
 === Visual Trading Browser Checkpoint ===
@@ -102,8 +114,11 @@ $now
 Current branch:
 $branch
 
+Detected phase:
+$phase
+
 Git status:
-$status
+$(if ($status) { $status } else { "Working tree clean" })
 
 Recent commits:
 $commits
@@ -111,54 +126,25 @@ $commits
 Analyzer health:
 $health
 
-M2.5 checks:
-timing_state_machine.py: $timingFile
-main.py M2.7 phase: $mainM25
-main.py TimingStateMachine: $mainTiming
-main.py _timing_machine: $timingInstance
-schemas.py candle_second: $schemaSecond
-schemas.py candle_remaining: $schemaRemain
-schemas.py analyzer_timing: $schemaAnalyzerTiming
-electron/main.ts candleSecond: $electronSecond
-electron/analyzer-client.ts candle_second: $clientSecond
-renderer/index.html analyzer_timing: $rendererTiming
+Project checks:
+$checkText
 
-M2.6 checks:
-prediction_lock.py: $predictionLockFile
-main.py PredictionLockManager: $mainPredictionLock
-renderer/index.html predictionLockStatus: $rendererPredictionLock
+Project memory files:
+- docs/CHATGPT_PROJECT_STATE.md
+- docs/STRATEGY_LAYER_MEMORY.md
 
-M2.7 checks:
-strategy_scoring.py: $strategyScoringFile
-prediction_lock.py StrategyScoringEngine: $predictionLockStrategy
-renderer/index.html lockedStrategyScore: $rendererStrategyScore
-
-M2.8 checks:
-signal_history.py: $signalHistoryFile
-main.py SignalHistoryTracker: $mainSignalHistory
-renderer/index.html signalHistoryCard: $rendererSignalHistory
-
-M2.9 checks:
-candle_outcome_resolver.py: $outcomeResolverFile
-signal_history.py CandleOutcomeResolver: $signalHistoryResolver
-renderer/index.html accuracyPercent: $rendererOutcomeAccuracy
-
-M3.0 checks:
-main.py M3.0 phase: $mainM30
-signal_history.py panel summary: $historyM30
-renderer/index.html stableSignalPanelCard: $rendererM30
-
-M3.1 checks:
-main.py M3.1 phase: $mainM31
-renderer/index.html signalTableCard: $rendererM31
+Strategy layer memory:
+- Future M4 strategy layer will learn strategy ideas from professional videos, books, websites, and examples.
+- Strategies will be converted into structured rules/features.
+- A separate dataset-creation browser/tool will be built later.
+- Live/replay data will create labeled datasets.
+- Offline training/validation will decide which strategies enter the model.
+- System remains prediction-only unless future safety/legal/manual-confirmation phases explicitly change it.
 
 NEXT CONTINUATION TASK:
 $nextText
 
-Important file:
-docs/CHATGPT_PROJECT_STATE.md
-
-Next time run:
+Important next command:
 Set-Location "E:\VS Code\visual-trading-browser"
 powershell -ExecutionPolicy Bypass -File ".\scripts\project-checkpoint.ps1"
 
@@ -166,12 +152,6 @@ Then say:
 Continue from docs/CHATGPT_PROJECT_STATE.md
 "@
 
-$report | Set-Content -Encoding UTF8 "docs/CHATGPT_PROJECT_STATE.md"
+Set-Content -Path "docs/CHATGPT_PROJECT_STATE.md" -Value $report -Encoding UTF8
+
 Write-Host $report
-
-
-
-
-
-
-

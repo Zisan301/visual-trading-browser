@@ -1,84 +1,63 @@
 ﻿=== Visual Trading Browser Checkpoint ===
 
 Last updated:
-2026-08-01 23:37:34 +06:00
+2026-08-02 00:02:27 +06:00
 
 Current branch:
-m3.1-signal-table-ui
+main
+
+Detected phase:
+M3.1_SIGNAL_TABLE_UI
 
 Git status:
- M analyzer/app/main.py
- M renderer/index.html
- M scripts/project-checkpoint.ps1
-?? analyzer/app/main.py.bak.m31.20260801_233254
-?? renderer/index.html.bak.m31.20260801_233254
-?? scripts/project-checkpoint.ps1.bak.m31.20260801_233254
+ M docs/CHATGPT_PROJECT_STATE.md  M scripts/project-checkpoint.ps1 ?? docs/STRATEGY_LAYER_MEMORY.md
 
 Recent commits:
-101c326 (HEAD -> m3.1-signal-table-ui, origin/main, origin/m3.1-signal-table-ui, origin/HEAD, main) Merge M3.0 stable signal panel
-d382909 (origin/m3.0-stable-signal-panel, m3.0-stable-signal-panel) Add M3.0 stable signal panel
-b18dbc7 Merge M2.9 candle outcome resolver
-869d08a (origin/m2.9-candle-outcome-resolver, m2.9-candle-outcome-resolver) Add M2.9 candle outcome resolver
-a28285f Merge M2.8 signal history tracker
-07f55db (origin/m2.8-signal-history-tracker, m2.8-signal-history-tracker) Add M2.8 signal history tracker
-df5e455 Merge M2.7 strategy scoring placeholder
-e407a25 (origin/m2.7-strategy-scoring-placeholder, m2.7-strategy-scoring-placeholder) Update checkpoint for M2.7
-d361416 Add M2.7 strategy scoring placeholder
-3892fda Merge M2.6 prediction lock window
+a4cb297 (HEAD -> main, origin/main, origin/HEAD) Merge M3.1 signal table UI a4ec6e5 (origin/m3.1-signal-table-ui, m3.1-signal-table-ui) Add M3.1 signal table UI 101c326 Merge M3.0 stable signal panel d382909 (origin/m3.0-stable-signal-panel, m3.0-stable-signal-panel) Add M3.0 stable signal panel b18dbc7 Merge M2.9 candle outcome resolver 869d08a (origin/m2.9-candle-outcome-resolver, m2.9-candle-outcome-resolver) Add M2.9 candle outcome resolver a28285f Merge M2.8 signal history tracker 07f55db (origin/m2.8-signal-history-tracker, m2.8-signal-history-tracker) Add M2.8 signal history tracker df5e455 Merge M2.7 strategy scoring placeholder e407a25 (origin/m2.7-strategy-scoring-placeholder, m2.7-strategy-scoring-placeholder) Update checkpoint for M2.7
 
 Analyzer health:
 Analyzer not running. Start with: npm run analyzer:dev
 
-M2.5 checks:
+Project checks:
+docs/CHATGPT_PROJECT_STATE.md: YES
+docs/STRATEGY_LAYER_MEMORY.md: YES
 timing_state_machine.py: YES
-main.py M2.7 phase: YES
 main.py TimingStateMachine: YES
-main.py _timing_machine: YES
-schemas.py candle_second: YES
-schemas.py candle_remaining: YES
-schemas.py analyzer_timing: YES
-electron/main.ts candleSecond: YES
-electron/analyzer-client.ts candle_second: YES
-renderer/index.html analyzer_timing: YES
-
-M2.6 checks:
-prediction_lock.py: YES
 main.py PredictionLockManager: YES
-renderer/index.html predictionLockStatus: YES
-
-M2.7 checks:
+prediction_lock.py: YES
 strategy_scoring.py: YES
 prediction_lock.py StrategyScoringEngine: YES
-renderer/index.html lockedStrategyScore: YES
-
-M2.8 checks:
 signal_history.py: YES
-main.py SignalHistoryTracker: YES
-renderer/index.html signalHistoryCard: YES
-
-M2.9 checks:
+signal_history.py panel summary: YES
 candle_outcome_resolver.py: YES
 signal_history.py CandleOutcomeResolver: YES
-renderer/index.html accuracyPercent: YES
+renderer predictionLockStatus: YES
+renderer signalHistoryCard: YES
+renderer stableSignalPanelCard: YES
+renderer signalTableCard: YES
+electron/main.ts candleSecond: YES
+electron/analyzer-client.ts candle_second: YES
 
-M3.0 checks:
-main.py M3.0 phase: YES
-signal_history.py panel summary: NO
-renderer/index.html stableSignalPanelCard: YES
 
-M3.1 checks:
-main.py M3.1 phase: YES
-renderer/index.html signalTableCard: YES
+Project memory files:
+- docs/CHATGPT_PROJECT_STATE.md
+- docs/STRATEGY_LAYER_MEMORY.md
+
+Strategy layer memory:
+- Future M4 strategy layer will learn strategy ideas from professional videos, books, websites, and examples.
+- Strategies will be converted into structured rules/features.
+- A separate dataset-creation browser/tool will be built later.
+- Live/replay data will create labeled datasets.
+- Offline training/validation will decide which strategies enter the model.
+- System remains prediction-only unless future safety/legal/manual-confirmation phases explicitly change it.
 
 NEXT CONTINUATION TASK:
 - Uncommitted changes exist. Test, then commit/push.
-- Fix M3.0 stable signal backend summary.
-- Restart analyzer or finish health phase M2.7 wiring.
+- Continue with M3.2 Signal Export and Session Summary.
+- Analyzer not running. For live test run: npm run analyzer:dev
 
-Important file:
-docs/CHATGPT_PROJECT_STATE.md
 
-Next time run:
+Important next command:
 Set-Location "E:\VS Code\visual-trading-browser"
 powershell -ExecutionPolicy Bypass -File ".\scripts\project-checkpoint.ps1"
 
