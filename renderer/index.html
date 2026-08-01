@@ -185,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M2.7 - Strategy scoring placeholder connected to prediction lock window.</p>
+        <p class="muted">M2.8 - Signal history tracker connected to prediction lock window.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -221,6 +221,31 @@
 
     
     <!-- M2.6 Prediction Lock Card START -->
+    <div class="card" id="signalHistoryCard">
+      <h2>Signal history tracker</h2>
+
+      <div class="metric">
+        <span>Total locked signals</span>
+        <strong id="totalLockedSignals">0</strong>
+      </div>
+
+      <div class="metric">
+        <span>Last decision</span>
+        <strong id="lastHistoryDecision">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Last confidence</span>
+        <strong id="lastHistoryConfidence">--</strong>
+      </div>
+
+      <div class="metric">
+        <span>Accuracy status</span>
+        <strong id="accuracyStatus">PLACEHOLDER</strong>
+      </div>
+
+      <pre id="signalHistoryDetails">No signal history yet.</pre>
+    </div>
     <div class="card" id="predictionLockCard">
       <h2>Prediction lock window</h2>
 
@@ -708,8 +733,50 @@
 </script>
 <!-- M2.7 Strategy Score Script END -->
 
+
+<!-- M2.8 Signal History Script START -->
+<script>
+(function() {
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function percent(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return String(Math.round(n * 100)) + "%";
+  }
+
+  window.updateSignalHistory = function(result) {
+    const market = result && result.market ? result.market : {};
+    const history = market.signal_history || {};
+    const last = history.last_signal || null;
+    const accuracy = history.accuracy || {};
+
+    setText("totalLockedSignals", String(history.total_locked_signals ?? 0));
+    setText("lastHistoryDecision", last && last.decision ? last.decision : "--");
+    setText("lastHistoryConfidence", last && last.confidence !== undefined ? percent(last.confidence) : "--");
+    setText("accuracyStatus", accuracy.status || "PLACEHOLDER");
+
+    const details = document.getElementById("signalHistoryDetails");
+    if (details) {
+      details.textContent = JSON.stringify(history.recent_signals || [], null, 2);
+    }
+  };
+
+  if (window.vtb && typeof window.vtb.onAnalyzerResult === "function") {
+    window.vtb.onAnalyzerResult(function(result) {
+      window.updateSignalHistory(result);
+    });
+  }
+})();
+</script>
+<!-- M2.8 Signal History Script END -->
+
 </body>
 </html>
+
 
 
 
