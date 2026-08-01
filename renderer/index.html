@@ -185,7 +185,7 @@
     <div class="brand">
       <div>
         <h1>Visual Trading Browser</h1>
-        <p class="muted">M2.1 - Electron scanner connected to local Python analyzer.</p>
+        <p class="muted">M2.5 - Electron scanner connected to analyzer timing state machine.</p>
       </div>
       <span id="scannerBadge" class="badge">Scanner off</span>
     </div>
@@ -516,8 +516,56 @@
 
     window.vtb.getAnalyzerStatus().then(updateAnalyzerStatus);
   </script>
+
+<!-- M2.5 Timing Dashboard Panel -->
+<div id="m25TimingPanel" style="margin-top: 12px; padding: 12px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;">
+  <div style="font-weight: 600; margin-bottom: 8px;">M2.5 Analyzer Timing</div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 8px;">
+    <div>
+      <div style="font-size: 12px; opacity: 0.7;">Timing Phase</div>
+      <div id="analyzerTimingPhase">--</div>
+    </div>
+
+    <div>
+      <div style="font-size: 12px; opacity: 0.7;">Candle Second</div>
+      <div id="candleSecond">--</div>
+    </div>
+
+    <div>
+      <div style="font-size: 12px; opacity: 0.7;">Candle Remaining</div>
+      <div id="candleRemaining">--</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.updateM25AnalyzerTiming = function(result) {
+    if (!result) return;
+
+    const timing = result.analyzer_timing || {};
+
+    const phaseEl = document.getElementById("analyzerTimingPhase");
+    const secondEl = document.getElementById("candleSecond");
+    const remainingEl = document.getElementById("candleRemaining");
+
+    if (phaseEl) {
+      phaseEl.textContent = timing.phase ?? result.phase ?? "--";
+    }
+
+    if (secondEl) {
+      secondEl.textContent = result.candle_second ?? timing.candle_second ?? "--";
+    }
+
+    if (remainingEl) {
+      remainingEl.textContent = result.candle_remaining ?? timing.candle_remaining ?? "--";
+    }
+  };
+</script>
+
 </body>
 </html>
+
 
 
 

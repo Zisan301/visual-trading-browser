@@ -1,4 +1,23 @@
-﻿import WebSocket from "ws";
+﻿
+/**
+ * M2.5 timing metadata passthrough.
+ * Keeps backend timing fields available to Electron and renderer.
+ */
+function withAnalyzerTimingMetadata(data: any): any {
+  if (!data || typeof data !== "object") {
+    return withAnalyzerTimingMetadata(data);
+  }
+
+  const timing = data.analyzer_timing ?? null;
+
+  return {
+    ...data,
+    candle_second: data.candle_second ?? timing?.candle_second ?? null,
+    candle_remaining: data.candle_remaining ?? timing?.candle_remaining ?? null,
+    analyzer_timing: timing,
+  };
+}
+import WebSocket from "ws";
 
 export type AnalyzerStatus = {
   enabled: boolean;
@@ -235,3 +254,4 @@ export class AnalyzerClient {
     }
   }
 }
+
